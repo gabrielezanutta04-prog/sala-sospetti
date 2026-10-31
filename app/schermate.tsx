@@ -15,6 +15,7 @@ import {
   MAX_GIOCATORI,
   MIN_PLAYERS,
   NOME_MAX,
+  SEGNO_MISSIONE,
   TASKS_MIN,
   codiceValido,
 } from '../gioco/regole.ts'
@@ -160,6 +161,10 @@ function ListaRegole() {
       <li>
         Tutti hanno delle task da fare davvero, in casa. Finita una, si preme <b>Fatto</b> e la barra verde cresce per tutti, anche con le
         spunte degli assassini.
+      </li>
+      <li>
+        Ogni tanto, al posto di una task, arriva una <b>missione segreta</b> su un altro giocatore. Può capitare a chiunque, civile o assassino,
+        e vale come una task: finita, si preme <b>Fatto</b>.
       </li>
       <li>
         Gli assassini eliminano di persona, di nascosto: prima di iniziare decidete insieme come, per esempio con un tocco sulla spalla. Chi
@@ -881,12 +886,16 @@ function Ruolo({ v, comanda, avvisa }: { v: VistaRuolo; comanda: Comanda; avvisa
 // ---- Partita ----
 
 // Montato solo dopo il gesto di un assassino vivo: per tutti gli altri questo nodo non esiste.
-function RiquadroUccidi({ uccidiDa, ora, comanda }: { uccidiDa: number; ora: number; comanda: Comanda }) {
+function RiquadroUccidi({ uccidiDa, ora, comanda, chiudi }: { uccidiDa: number; ora: number; comanda: Comanda; chiudi: () => void }) {
   const attesa = uccidiDa - ora
   const [perso, setPerso] = useState(false)
   const conferma = useConferma(uccidiDa, () => {}, () => setPerso(true))
   return (
     <section className="uccidi">
+      {/* Non è un Tasto: nasconderlo non passa dal server e deve funzionare anche senza rete */}
+      <button type="button" className="uccidi-chiudi" aria-label="Nascondi il riquadro Uccidi" onClick={chiudi}>
+        ×
+      </button>
       <div className="uccidi-testa">
         <p className="occhiello">Solo tu vedi questo riquadro</p>
         <span className="mono uccidi-stato">{attesa > 0 ? `pronto tra ${mmss(attesa)}` : 'pronto'}</span>
@@ -904,8 +913,7 @@ function RiquadroUccidi({ uccidiDa, ora, comanda }: { uccidiDa: number; ora: num
       </Tasto>
       {perso && <p className="uccidi-perso">{TESTO_PERSO}</p>}
       <p className="nota uccidi-spiega">
-        Elimina solo quando è pronto, poi premilo: riparte l&apos;attesa di {minuti(KILL_CD)} minuti. Tieni premuta la barra col codice
-        stanza per nasconderlo.
+        Elimina solo quando è pronto, poi premilo: riparte l&apos;attesa di {minuti(KILL_CD)} minuti. Tocca la x per nasconderlo.
       </p>
     </section>
   )
@@ -918,9 +926,10 @@ type PropsPartita = {
   avvisa: Avvisa
   sonoMorto: () => void
   uccidiVisibile: boolean
+  chiudiUccidi: () => void
 }
 
-function Partita({ v, ora, comanda, avvisa, sonoMorto, uccidiVisibile }: PropsPartita) {
+function Partita({ v, ora, comanda, avvisa, sonoMorto, uccidiVisibile, chiudiUccidi }: PropsPartita) {
   const morto = !v.io.vivo
   // Una riunione aperta cambia la fase e toglie di mezzo questa schermata. Per Fatto vale solo taskDa: la barra cresce anche con gli altri.
   const confermaRiunione = useConferma(v.f, () => {}, () => avvisa(TESTO_PERSO))
@@ -928,6 +937,7 @@ function Partita({ v, ora, comanda, avvisa, sonoMorto, uccidiVisibile }: PropsPa
   const attesaEmergency = v.emergencyDa - ora
   const inAttesa = v.taskFatta !== null && ora < v.taskDa
   const testoTask = inAttesa ? v.taskFatta : v.task
+  const missione = testoTask?.startsWith(SEGNO_MISSIONE) ? testoTask.slice(SEGNO_MISSIONE.length) : null
   const chiEmergency = v.emergencyDaId === v.io.id ? 'te' : v.emergencyDaNome
 
   return (
@@ -982,8 +992,8 @@ function Partita({ v, ora, comanda, avvisa, sonoMorto, uccidiVisibile }: PropsPa
             <section className="task">
               <div data-privato className="task-dentro">
                 <div>
-                  <p className="occhiello">La tua task</p>
-                  <p className="task-testo">{testoTask}</p>
+                  <p className="occhiello">{missione ? '🥚 Missione segreta' : 'La tua task'}</p>
+                  <p className="task-testo">{missione ?? testoTask}</p>
                   <p className="nota">{inAttesa ? 'Prossima task appena finisce il timer.' : 'Premi Fatto quando hai finito: la barra verde cresce per tutti.'}</p>
                 </div>
                 {inAttesa ? (
@@ -1009,7 +1019,7 @@ function Partita({ v, ora, comanda, avvisa, sonoMorto, uccidiVisibile }: PropsPa
         </div>
       </main>
       <footer className="piede">
-        {uccidiVisibile && v.uccidiDa !== undefined && <RiquadroUccidi uccidiDa={v.uccidiDa} ora={ora} comanda={comanda} />}
+        {uccidiVisibile && v.uccidiDa !== undefined && <RiquadroUccidi uccidiDa={v.uccidiDa} ora={ora} comanda={comanda} chiudi={chiudiUccidi} />}
         <Tasto className="tasto grande tratteggiato" disabled={morto} onClick={sonoMorto}>
           {morto ? 'Fuori dalle votazioni' : 'Sono morto'}
         </Tasto>
@@ -1340,7 +1350,7 @@ export function Gioco({ v, rete, comanda, adesso, esci, avvisa, riprova }: Props
 
         {v.schermata === 'sala' && <Sala v={v} comanda={comanda} avvisa={avvisa} togli={chiediTogli} chiediStart={() => chiedi({ tipo: 'start' })} />}
         {v.schermata === 'ruolo' && <Ruolo v={v} comanda={comanda} avvisa={avvisa} />}
-        {v.schermata === 'partita' && <Partita key={v.f} v={v} ora={ora} comanda={comanda} avvisa={avvisa} sonoMorto={chiediMorto} uccidiVisibile={uccidiVisibile} />}
+        {v.schermata === 'partita' && <Partita key={v.f} v={v} ora={ora} comanda={comanda} avvisa={avvisa} sonoMorto={chiediMorto} uccidiVisibile={uccidiVisibile} chiudiUccidi={() => setUccidiF(null)} />}
         {v.schermata === 'riunione' && <Riunione key={v.f} v={v} comanda={comanda} avvisa={avvisa} sonoMorto={chiediMorto} togli={chiediTogli} />}
         {v.schermata === 'esito' && <Esito v={v} ora={ora} />}
         {v.schermata === 'fine' && <Fine v={v} ora={ora} />}

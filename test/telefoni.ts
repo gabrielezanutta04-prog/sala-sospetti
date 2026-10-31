@@ -768,6 +768,10 @@ async function pressioneLunga(A: Telefono, C: Telefono) {
   await A.attendiRiquadri(0, 'seconda pressione lunga')
   await A.premi(PRESSA_MS)
   await A.attendiRiquadri(1, 'terza pressione lunga')
+  await A.tocca('Nascondi il riquadro Uccidi')
+  await A.attendiRiquadri(0, 'x del riquadro')
+  await A.premi(PRESSA_MS)
+  await A.attendiRiquadri(1, 'pressione lunga dopo la x')
 
   // Riquadro a parte, l'assassino resta identico al civile.
   await confrontaRuoli('riquadro aperto', A)

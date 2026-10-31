@@ -43,9 +43,10 @@ In tutte le schermate della stanza c'è la **barra verde** delle task, condivisa
 - Assassini vincono se: assassini vivi ≥ civili vivi (controllato dopo ogni votazione, "Sono morto", uscita).
 - Assassini: 1 di default, 2 selezionabile dall'host in sala d'attesa.
 - **Uccidi** (solo assassini): tasto con 5 min di attesa a inizio partita, dopo ogni uso e dopo ogni riunione. Il timer è personale per ogni assassino. Non segna nessuno: fa solo partire il timer; la vittima preme "Sono morto".
-- Il riquadro Uccidi è **nascosto** e si mostra/nasconde con una **pressione lunga (~0,65 s) sulla barra in alto**; per i civili lo stesso gesto non fa nulla, così le schermate sono identiche. Torna nascosto a ogni riunione.
+- Il riquadro Uccidi è **nascosto** e si mostra/nasconde con una **pressione lunga (~0,65 s) sulla barra in alto**; per i civili lo stesso gesto non fa nulla, così le schermate sono identiche. Si nasconde anche con la piccola x nel suo angolo. Torna nascosto a ogni riunione.
 - Nessun indizio sul ruolo fuori dalla schermata di assegnazione (tranne esito votazione e fine partita).
 - Chi esce: sparisce da lista e voti; se era host, il ruolo passa al giocatore successivo.
+- **Missioni segrete** (easter egg): dopo una spunta, una volta su 12 circa, chi è vivo riceve al posto di una task una missione su un altro giocatore connesso e non eliminato al voto. Vale come una task normale e il ruolo non conta. Se il nominato viene eliminato al voto o esce, o se chi la riceve non gioca più, torna una task normale.
 - **Sono morto** si può premere anche in riunione: chi aveva votato quel giocatore vota di nuovo.
 - Voto: chi è senza segnale da 45 s vale come Salta. Per chi è connesso non c'è nessun timer.
 - Host: senza segnale da 30 s il ruolo passa al giocatore successivo, che può togliere chi è offline.

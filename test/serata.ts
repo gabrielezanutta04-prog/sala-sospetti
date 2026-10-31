@@ -7,7 +7,7 @@
 //   node test/serata.ts --sensibilita            aggiunge il bilanciamento con ipotesi diverse
 //   node test/serata.ts --task 32,48 --giocatori 12,13   cambia la griglia del bilanciamento
 
-import { applica, codiceValido, entra, MAX_GIOCATORI, NOME_MAX, nuovaStanza, prossimaScadenza, scadi, segnale, TASKS, vista } from '../gioco/regole.ts'
+import { applica, codiceValido, entra, MAX_GIOCATORI, NOME_MAX, nuovaStanza, PROBABILITA_MISSIONE, prossimaScadenza, scadi, segnale, SEGNO_MISSIONE, TASKS, vista } from '../gioco/regole.ts'
 import type { Azione, Fase, Giocatore, Rifiuto, Schermata, Stato, Vista, VistaEsito, VistaFine, VistaPartita, VistaRiunione, VistaRuolo, VistaSala, Voto } from '../gioco/regole.ts'
 import { generatore, giro, IPOTESI, nuovaMemoria, nuovoMondo, passo, PERSONALITA, senzaManie } from './agenti.ts'
 import type { Agente, Ipotesi, Mondo, Piano, Telefono, Tratti } from './agenti.ts'
@@ -1400,23 +1400,92 @@ function coperturaTask() {
   vero(new Set(TASKS).size === TASKS.length && TASKS.length >= 30, 'servono almeno 30 testi diversi')
 
   // Molti giri di mazzo: dopo ogni spunta il testo deve cambiare.
+  // $& è un nome valido e nelle sostituzioni di testo ha un significato speciale.
   const s = nuovaStanza('ABCDE', 77)
-  const giocatori = ['a', 'b', 'c', 'd'].map(n => entra(s, n, n, 0)).map(e => (e as { id: number }).id)
+  const giocatori = ['Aldo', 'Bice', 'Ciro', '$&Dora'].map(n => entra(s, n, n, 0)).map(e => (e as { id: number }).id)
   applica(s, giocatori[0], { a: 'impostaTask', x: 1_000_000, f: s.f }, 0)
   applica(s, giocatori[0], { a: 'start', f: s.f }, 0)
   for (const id of giocatori) applica(s, id, { a: 'ruoloVisto', f: s.f }, 0)
   let ora = 0
-  for (let turno = 0; turno < 3000; turno++) {
-    ora += ATTESO.task
-    for (const g of s.giocatori) {
-      vero(applica(s, g.id, { a: 'spunta', f: s.f }, ora), 'spunta rifiutata')
-      vero(g.task !== g.taskFatta, `task ripetuta al turno ${turno}`)
+  let missioni = 0
+  let suVittima = 0
+  let vittima: (typeof s.giocatori)[number] | undefined
+  const giri = (quanti: number) => {
+    for (let turno = 0; turno < quanti; turno++) {
+      ora += ATTESO.task
+      for (const g of s.giocatori) segnale(s, g.id, ora)
+      for (const g of s.giocatori) {
+        vero(applica(s, g.id, { a: 'spunta', f: s.f }, ora), 'spunta rifiutata')
+        vero(g.task !== g.taskFatta, `task ripetuta al turno ${turno}`)
+        vero(!g.task?.includes('{'), `segnaposto rimasto: ${g.task}`)
+        if (!g.task?.startsWith(SEGNO_MISSIONE)) continue
+        missioni++
+        const nominati = s.giocatori.filter(a => g.task?.includes(a.nome))
+        vero(g.vivo, 'missione segreta a chi è fuori gioco')
+        vero(nominati.length === 1 && nominati[0].id !== g.id && nominati[0].id === g.missioneSu, `missione segreta sul nome sbagliato: ${g.task}`)
+        if (nominati[0].id === vittima?.id) suVittima++
+      }
     }
+  }
+
+  giri(3000)
+  const frequenza = missioni / (3000 * giocatori.length)
+  vero(Math.abs(frequenza - PROBABILITA_MISSIONE) < 0.015, `missioni segrete con frequenza ${frequenza}`)
+
+  vittima = s.giocatori.find(g => g.ruolo === 'civile')
+  vero(applica(s, vittima?.id ?? -1, { a: 'sonoMorto', f: s.f }, ora), 'Sono morto rifiutato')
+  giri(1000)
+  vero(suVittima > 0, 'chi ha premuto Sono morto non viene più nominato: lo rivelerebbe')
+}
+
+// Sei giocatori e spunte a giro finché uno non ha una missione in attesa.
+function conMissione(seme: number) {
+  const s = nuovaStanza('ABCDE', seme)
+  const ids = ['Aldo', 'Bice', 'Ciro', 'Dora', 'Elio', 'Fede'].map(n => (entra(s, n, n, 0) as { id: number }).id)
+  applica(s, ids[0], { a: 'impostaTask', x: 1_000_000, f: s.f }, 0)
+  applica(s, ids[0], { a: 'start', f: s.f }, 0)
+  for (const id of ids) applica(s, id, { a: 'ruoloVisto', f: s.f }, 0)
+  for (let ora = ATTESO.task; ; ora += ATTESO.task) {
+    for (const id of ids) segnale(s, id, ora)
+    for (const id of ids) applica(s, id, { a: 'spunta', f: s.f }, ora)
+    const chi = s.giocatori.find(g => g.missioneSu !== null)
+    if (chi) return { s, ora, chi, nominato: chi.missioneSu as number }
+  }
+}
+
+function missioniInAttesa() {
+  for (let seme = 1; seme <= 40; seme++) {
+    const annullata = (chi: { task: string | null; missioneSu: number | null }, come: string) => {
+      vero(!chi.task?.startsWith(SEGNO_MISSIONE) && chi.missioneSu === null, `seme ${seme}: missione rimasta dopo ${come}: ${chi.task}`)
+    }
+
+    const esce = conMissione(seme)
+    vero(applica(esce.s, esce.nominato, { a: 'esci', f: esce.s.f }, esce.ora), 'Esci rifiutato')
+    annullata(esce.chi, 'l’uscita del nominato')
+
+    const morto = conMissione(seme)
+    const testo = morto.chi.task
+    vero(applica(morto.s, morto.nominato, { a: 'sonoMorto', f: morto.s.f }, morto.ora), 'Sono morto rifiutato')
+    vero(morto.chi.task === testo, `seme ${seme}: la missione è cambiata col Sono morto del nominato, che così si scopre`)
+
+    const propria = conMissione(seme)
+    vero(applica(propria.s, propria.chi.id, { a: 'sonoMorto', f: propria.s.f }, propria.ora), 'Sono morto rifiutato')
+    annullata(propria.chi, 'il Sono morto di chi la teneva')
+
+    const voto = conMissione(seme)
+    vero(applica(voto.s, voto.chi.id, { a: 'report', f: voto.s.f }, voto.ora), 'Report rifiutato')
+    for (const g of [...voto.s.giocatori]) {
+      const x = g.id === voto.nominato ? 'salta' : voto.nominato
+      vero(applica(voto.s, g.id, { a: 'vota', x, f: voto.s.f }, voto.ora), 'voto rifiutato')
+    }
+    vero(voto.s.fase === 'esito', `seme ${seme}: votazione non chiusa`)
+    annullata(voto.chi, 'l’eliminazione del nominato')
   }
 }
 
 const SCENARI: [string, () => void][] = [
   ['S1  stesso seme, stessa serata', riproducibile],
+  ['S1b missioni in attesa', missioniInAttesa],
   ['S2  telefono scarico: Togli, in riunione e in sala', s2],
   ['S3  host bloccato', s3],
   ['S4  uscita con voti ricevuti', s4],

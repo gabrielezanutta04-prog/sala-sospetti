@@ -50,6 +50,21 @@ export const TASKS = [
   'Svolgi la task di un altro giocatore al posto suo',
 ]
 
+// Easter egg: ogni tanto, al posto di una task, una missione segreta su un altro giocatore. {nome} diventa il suo nome.
+// Le missioni finiscono anche se l'altra persona non collabora: Fatto è l'unico modo di passare alla task dopo.
+export const SEGNO_MISSIONE = '🥚 '
+export const PROBABILITA_MISSIONE = 1 / 12
+export const MISSIONI_SEGRETE = [
+  'Segui {nome} per un minuto cercando di non farti notare',
+  'Imita i gesti di {nome} per 30 secondi senza farti notare',
+  'Fissa {nome} per 20 secondi: se se ne accorge, nega tutto',
+  "Sussurra «ti tengo d'occhio» in modo che {nome} ti senta, poi vai via",
+  'Hai un minuto per fare in modo che {nome} dica «banana», senza chiederglielo',
+  'Resta al fianco di {nome} per un minuto senza dire nulla',
+  'Per 30 secondi cerca di far ridere {nome} senza parlare',
+  'Prova a farti dare il 5 da {nome} senza spiegare perché',
+]
+
 // ---- Tempi modificabili ----
 export const COOLDOWN = 10 * 60 * 1000 // Emergency: 10 min dall'ultima riunione d'emergenza, di chiunque
 export const TASK_MS = 2 * 60 * 1000 // attesa dopo una spunta
@@ -105,6 +120,7 @@ export type Giocatore = {
   causa: Causa | null
   ruoloVisto: boolean
   task: string | null // prossima task da fare: dopo una spunta è già pescata
+  missioneSu: number | null // chi nomina la task, se è una missione segreta
   taskFatta: string | null // task spuntata, a schermo finché non arriva taskDa
   taskDa: number // da quando si può spuntare
   uccidiDa: number | null // da quando questo assassino può usare Uccidi
@@ -291,6 +307,34 @@ function pesca(s: Stato, escluso: string | null): string {
   return TASKS[s.mazzo.splice(pos, 1)[0]]
 }
 
+// Dopo una spunta. Il ruolo non conta: chi riceve la missione e chi viene nominato li decide solo il caso.
+// Chi ha premuto Sono morto resta nominabile, altrimenti la missione rivelerebbe che qualcun altro non l'ha ancora premuto.
+function prossimaTask(s: Stato, g: Giocatore, ora: number): string {
+  g.missioneSu = null
+  const altri = s.giocatori.filter(a => a.id !== g.id && a.causa !== 'eliminato' && online(a, ora))
+  if (g.vivo && altri.length > 0 && casuale(s) < PROBABILITA_MISSIONE) {
+    const testo = MISSIONI_SEGRETE[Math.floor(casuale(s) * MISSIONI_SEGRETE.length)]
+    const scelto = altri[Math.floor(casuale(s) * altri.length)]
+    const missione = SEGNO_MISSIONE + testo.replace('{nome}', () => scelto.nome)
+    if (missione !== g.taskFatta) {
+      g.missioneSu = scelto.id
+      return missione
+    }
+  }
+  return pesca(s, g.taskFatta)
+}
+
+function annullaMissione(s: Stato, g: Giocatore) {
+  if (!g.task?.startsWith(SEGNO_MISSIONE)) return
+  g.task = pesca(s, g.taskFatta)
+  g.missioneSu = null
+}
+
+// Solo per uscite che tutti vedono: sul Sono morto del nominato un testo che cambia rivelerebbe chi l'ha premuto.
+function annullaMissioniSu(s: Stato, id: number) {
+  for (const g of s.giocatori) if (g.missioneSu === id) annullaMissione(s, g)
+}
+
 export const maxAssassini = (giocatori: number) => Math.max(1, Math.floor((giocatori - 1) / 2))
 
 // La scelta dell'host resta salvata: se esce qualcuno vale il massimo consentito, se rientra torna valida.
@@ -339,7 +383,7 @@ function chiaveNome(nome: string): string {
     .replace(/./gu, c => SOSIA_LATINI[SOSIA_CIRILLICI.indexOf(c)] ?? c)
 }
 
-const POSTO_VUOTO = { ruolo: null, vivo: true, causa: null, ruoloVisto: false, task: null, taskFatta: null, taskDa: 0, uccidiDa: null }
+const POSTO_VUOTO = { ruolo: null, vivo: true, causa: null, ruoloVisto: false, task: null, missioneSu: null, taskFatta: null, taskDa: 0, uccidiDa: null }
 
 function nuovoGiocatore(id: number, token: string, nome: string, colore: number, ora: number): Giocatore {
   return { id, token, nome, colore, visto: ora, ...POSTO_VUOTO }
@@ -419,6 +463,8 @@ function controllaChiusura(s: Stato, ora: number): boolean {
   if (eliminato) {
     eliminato.vivo = false
     eliminato.causa = 'eliminato'
+    annullaMissione(s, eliminato)
+    annullaMissioniSu(s, eliminato.id)
   }
   s.fase = 'esito'
   s.f++
@@ -465,6 +511,7 @@ function rimuovi(s: Stato, g: Giocatore, ora: number) {
     s.hostId = (altri.find(x => online(x, ora)) ?? altri[0])?.id ?? null
   }
   s.giocatori = s.giocatori.filter(x => x !== g)
+  annullaMissioniSu(s, g.id)
   dopoPerdita(s, g.id, ora)
 }
 
@@ -608,7 +655,7 @@ function esegui(s: Stato, g: Giocatore, az: Azione, ora: number): boolean {
     case 'spunta':
       if (qui !== 'partita' || !g.task || ora < g.taskDa) return false
       g.taskFatta = g.task
-      g.task = pesca(s, g.taskFatta)
+      g.task = prossimaTask(s, g, ora)
       g.taskDa = ora + s.durate.task
       s.barra = Math.min(s.traguardo, s.barra + 1)
       if (s.barra >= s.traguardo) finisci(s, 'civili', 'barra', ora)
@@ -623,6 +670,7 @@ function esegui(s: Stato, g: Giocatore, az: Azione, ora: number): boolean {
       if ((qui !== 'partita' && qui !== 'riunione') || !g.vivo) return false
       g.vivo = false
       g.causa = 'morto'
+      annullaMissione(s, g)
       dopoPerdita(s, g.id, ora)
       return true
 
