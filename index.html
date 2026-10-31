@@ -1,0 +1,722 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sala Sospetti</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+/* Layout: a phone-sized game column (what each player sees) with a dashed "simulatore" panel beside it on wide screens, below it on narrow ones. */
+:root{
+  --bg:#0e1322; --panel:#161d30; --panel-2:#1e2740; --line:#2b3552; --line-strong:#3b4868;
+  --fg:#eef1f8; --muted:#93a0bd;
+  --primary:#7ea4ff; --primary-ink:#0b1430;
+  --green:#3ccf6e; --green-ink:#07210f;
+  --red:#ff5265; --red-ink:#2a0609;
+  --amber:#ffb62e; --amber-ink:#2a1a02;
+  --shadow:0 10px 30px rgba(0,0,0,.35);
+  --display:"Chakra Petch","Trebuchet MS",sans-serif;
+  --body:"IBM Plex Sans","Segoe UI",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  --radius:14px;
+  color-scheme:dark;
+}
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]){
+    --bg:#e9edf5; --panel:#ffffff; --panel-2:#f2f5fb; --line:#d3dae9; --line-strong:#b6c1d8;
+    --fg:#121a2d; --muted:#5b6782;
+    --primary:#2d5fe3; --primary-ink:#ffffff;
+    --green:#1f9f4f; --green-ink:#ffffff;
+    --red:#d8303f; --red-ink:#ffffff;
+    --amber:#e09200; --amber-ink:#1d1300;
+    --shadow:0 10px 30px rgba(20,30,60,.12);
+    color-scheme:light;
+  }
+}
+:root[data-theme="light"]{
+  --bg:#e9edf5; --panel:#ffffff; --panel-2:#f2f5fb; --line:#d3dae9; --line-strong:#b6c1d8;
+  --fg:#121a2d; --muted:#5b6782;
+  --primary:#2d5fe3; --primary-ink:#ffffff;
+  --green:#1f9f4f; --green-ink:#ffffff;
+  --red:#d8303f; --red-ink:#ffffff;
+  --amber:#e09200; --amber-ink:#1d1300;
+  --shadow:0 10px 30px rgba(20,30,60,.12);
+  color-scheme:light;
+}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15px;line-height:1.45;-webkit-font-smoothing:antialiased}
+.shell{max-width:900px;margin:0 auto;padding-block:20px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;grid-template-columns:minmax(0,1fr);gap:20px;align-items:start}
+@media (min-width:900px){.shell{grid-template-columns:minmax(0,480px) minmax(0,340px);justify-content:center}}
+
+h1,h2,h3,h4{font-family:var(--display);margin:0;text-wrap:balance;line-height:1.1}
+h1{font-size:40px}
+h2{font-size:22px}
+p{margin:0}
+.eyebrow{font-family:var(--display);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.lead{color:var(--muted)}
+.muted{color:var(--muted)}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.small{font-size:13px}
+
+/* phone frame */
+.phone{background:var(--panel);border:1px solid var(--line);border-radius:22px;overflow:hidden;box-shadow:var(--shadow);min-height:660px;display:flex;flex-direction:column;min-width:0}
+.topbar{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line);background:var(--panel-2);font-family:var(--display);user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:manipulation}
+.tb-left{display:flex;align-items:baseline;gap:8px;min-width:0}
+.tb-k{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.tb-code{font-family:var(--mono);font-size:18px;letter-spacing:.18em}
+.tb-right{display:flex;align-items:center;gap:8px;min-width:0}
+.tb-name{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tb-exit{padding:6px 10px;font-size:12px;border-radius:9px;color:var(--muted);flex:none}
+.tb-exit:hover{color:var(--red);border-color:var(--red)}
+.phone{position:relative}
+.overlay{position:absolute;inset:0;z-index:5;background:color-mix(in srgb,var(--bg) 70%,transparent);backdrop-filter:blur(3px);display:grid;place-items:center;padding:16px}
+.dialog{background:var(--panel);border:1px solid var(--line-strong);border-radius:var(--radius);padding:20px 18px;display:grid;gap:12px;width:100%;max-width:340px;box-shadow:var(--shadow);animation:pop .25s ease}
+.dialog h2{font-size:20px}
+.dialog p{color:var(--muted);font-size:14px}
+.btn.danger{background:var(--red);color:var(--red-ink);border-color:transparent}
+.kill{background:color-mix(in srgb,var(--red) 8%,var(--panel-2));border:1px solid color-mix(in srgb,var(--red) 45%,var(--line));border-radius:var(--radius);padding:12px 14px;display:grid;gap:10px}
+.kill-head{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.kill-head .sub{font-size:12px;color:var(--muted)}
+.dead-btn{color:var(--muted);border-style:dashed}
+.dead-btn:not([disabled]):hover{color:var(--red);border-color:var(--red);border-style:solid}
+.taskbar{padding:10px 16px 12px;border-bottom:1px solid var(--line)}
+.taskbar .lbl{display:flex;justify-content:space-between;font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:6px;font-family:var(--display)}
+.rail{height:14px;background:var(--bg);border-radius:999px;overflow:hidden;border:1px solid var(--line)}
+.fill{height:100%;width:0;background:var(--green);border-radius:999px;transition:width .5s ease;box-shadow:0 0 10px color-mix(in srgb,var(--green) 70%,transparent)}
+.fill.bump{animation:bump .6s ease}
+@keyframes bump{0%{filter:brightness(1.6)}100%{filter:brightness(1)}}
+.screen{padding:20px 16px 24px;flex:1;display:flex;flex-direction:column;gap:16px;min-width:0}
+
+/* buttons */
+.btn{appearance:none;border:1px solid var(--line-strong);background:var(--panel-2);color:var(--fg);font:600 15px var(--display);letter-spacing:.04em;text-transform:uppercase;padding:12px 18px;border-radius:12px;cursor:pointer;transition:transform .08s,border-color .15s,background .15s}
+.btn:hover{border-color:var(--primary)}
+.btn:active{transform:translateY(1px)}
+.btn.primary{background:var(--primary);color:var(--primary-ink);border-color:transparent}
+.btn.green{background:var(--green);color:var(--green-ink);border-color:transparent}
+.btn.big{width:100%;padding:16px;font-size:17px}
+.btn[disabled]{opacity:.45;cursor:not-allowed;transform:none}
+:where(button,input,[tabindex]):focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+
+/* inputs */
+.field{display:grid;gap:6px}
+.field span{font-size:13px;color:var(--muted);font-weight:500}
+input[type=text]{width:100%;background:var(--bg);border:1px solid var(--line-strong);color:var(--fg);border-radius:12px;padding:12px 14px;font:500 16px var(--body);min-width:0}
+input[type=text]::placeholder{color:var(--muted);opacity:.8}
+.code-input{font-family:var(--mono);letter-spacing:.3em;text-transform:uppercase;text-align:center;font-size:20px}
+.row{display:flex;gap:10px;align-items:stretch}
+.row > input{flex:1}
+
+/* cards */
+.card{background:var(--panel-2);border:1px solid var(--line);border-radius:var(--radius);padding:16px;display:grid;gap:10px}
+.card p{color:var(--muted);font-size:14px}
+.divider{display:flex;align-items:center;gap:12px;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.12em;font-family:var(--display)}
+.divider::before,.divider::after{content:"";flex:1;height:1px;background:var(--line)}
+.notice{border:1px dashed var(--line-strong);border-radius:12px;padding:12px 14px;color:var(--muted);font-size:14px;text-align:center}
+.notice.warn{border-color:var(--amber);color:var(--fg)}
+
+/* players */
+.players{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.player{display:flex;align-items:center;gap:12px;padding:10px 12px;background:var(--panel-2);border:1px solid var(--line);border-radius:12px;min-width:0}
+.player.dead{opacity:.5}
+.player.dead .pname{text-decoration:line-through}
+.avatar{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;font:700 15px var(--display);color:#fff;background:hsl(var(--h) 55% 45%);flex:none}
+.pname{font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;align-items:center;gap:8px}
+.tag{font:600 11px var(--display);letter-spacing:.08em;text-transform:uppercase;padding:3px 8px;border-radius:999px;border:1px solid var(--line-strong);color:var(--muted);white-space:nowrap}
+.tag.host{color:var(--amber);border-color:var(--amber)}
+.tag.you{color:var(--primary);border-color:var(--primary)}
+.tag.civ{color:var(--green);border-color:var(--green)}
+.tag.ass{color:var(--red);border-color:var(--red)}
+.tag.dead{color:var(--muted);border-style:dashed}
+.waiting-dots::after{content:"";animation:dots 1.4s steps(4,end) infinite}
+@keyframes dots{0%{content:""}25%{content:"."}50%{content:".."}75%{content:"..."}100%{content:""}}
+.codebox{display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--bg);border:1px solid var(--line-strong);border-radius:var(--radius);padding:12px 14px}
+.codebox b{font:600 30px var(--mono);letter-spacing:.3em}
+.codebox .k{font:600 11px var(--display);letter-spacing:.14em;text-transform:uppercase;color:var(--muted);display:block}
+.setting{background:var(--panel-2);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px;display:grid;gap:8px}
+.setting .k{font:600 11px var(--display);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.setting-main{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.stepper{display:flex;align-items:center;gap:10px}
+.stepper .btn{width:44px;height:44px;padding:0;font-size:22px;line-height:1;display:grid;place-items:center}
+.stepper .num,.big-num{font:600 26px var(--mono);min-width:3ch;text-align:center}
+.stepper .num{width:5ch;background:var(--bg);border:1px solid var(--line-strong);color:var(--fg);border-radius:10px;padding:4px 6px;-moz-appearance:textfield}
+.stepper .num::-webkit-outer-spin-button,.stepper .num::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+
+/* round action buttons */
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:16px;justify-items:center;padding:8px 0 4px}
+.action{display:grid;justify-items:center;gap:10px;text-align:center}
+.action .lbl{font:700 14px var(--display);letter-spacing:.06em;text-transform:uppercase}
+.action .sub{font:500 12px var(--mono);font-variant-numeric:tabular-nums;color:var(--muted);min-height:1.2em}
+.round{--c:var(--red);--ink:var(--red-ink);width:124px;height:124px;border-radius:50%;border:0;display:grid;place-items:center;color:var(--ink);cursor:pointer;
+  background:radial-gradient(circle at 35% 30%,color-mix(in srgb,var(--c) 65%,white) 0%,var(--c) 50%,color-mix(in srgb,var(--c) 70%,black) 100%);
+  box-shadow:inset 0 -5px 0 rgba(0,0,0,.22),0 8px 0 color-mix(in srgb,var(--c) 50%,black),0 16px 24px rgba(0,0,0,.35);
+  transition:transform .08s,box-shadow .08s,filter .2s}
+.round.emergency{--c:var(--amber);--ink:var(--amber-ink)}
+.round:not([disabled]):active{transform:translateY(7px);box-shadow:inset 0 -2px 0 rgba(0,0,0,.22),0 1px 0 color-mix(in srgb,var(--c) 50%,black),0 6px 12px rgba(0,0,0,.3)}
+.round[disabled]{filter:saturate(.15) brightness(.85);cursor:not-allowed;box-shadow:inset 0 -5px 0 rgba(0,0,0,.22),0 8px 0 color-mix(in srgb,var(--c) 30%,black),0 10px 18px rgba(0,0,0,.25)}
+.round svg{width:54px;height:54px}
+
+/* task box */
+.task{display:grid;grid-template-columns:minmax(0,1fr) 84px;gap:14px;background:var(--panel-2);border:1px solid var(--line);border-radius:var(--radius);padding:14px}
+.task .ttext{font-size:17px;font-weight:500;line-height:1.35;margin-top:4px}
+.check{width:84px;height:84px;border-radius:18px;border:2px solid var(--line-strong);background:var(--bg);display:grid;place-items:center;align-content:center;cursor:pointer;padding:0;color:var(--fg);transition:border-color .2s,background .2s}
+.check:hover{border-color:var(--primary)}
+.check.on{border-color:var(--green);background:color-mix(in srgb,var(--green) 14%,var(--bg));cursor:default}
+.check .ck{width:28px;height:28px;color:var(--green)}
+.check .timer{font:600 16px var(--mono);font-variant-numeric:tabular-nums;color:var(--green);margin-top:2px}
+.check .hint{font:600 11px var(--display);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+
+/* role reveal */
+.reveal{text-align:center;padding:30px 18px;display:grid;gap:12px;border-radius:var(--radius);border:1px solid;justify-items:center;animation:pop .35s ease}
+.reveal.civ{border-color:var(--green);background:color-mix(in srgb,var(--green) 10%,var(--panel-2))}
+.reveal.ass{border-color:var(--red);background:color-mix(in srgb,var(--red) 10%,var(--panel-2))}
+.reveal h2{font-size:46px;letter-spacing:.06em}
+.reveal.civ h2{color:var(--green)}
+.reveal.ass h2{color:var(--red)}
+.reveal p{max-width:30ch}
+.reveal.win h2{font-size:34px}
+@keyframes pop{from{transform:scale(.92);opacity:0}to{transform:none;opacity:1}}
+
+/* meeting */
+.meet-head{display:grid;gap:4px}
+.meet-head h2{font-size:26px}
+.voted{width:28px;text-align:center;color:var(--muted)}
+.voted.yes{color:var(--green)}
+.voted svg{width:18px;height:18px;vertical-align:middle}
+.votes{font:600 13px var(--mono);color:var(--muted)}
+.vbtn{min-width:64px}
+.result{border-radius:var(--radius);padding:20px 16px;text-align:center;display:grid;gap:8px;background:var(--panel-2);border:1px solid var(--line);justify-items:center;animation:pop .35s ease}
+.result h2{font-size:24px}
+.rolewas{font:700 18px var(--display);letter-spacing:.08em;text-transform:uppercase}
+.rolewas.civ{color:var(--green)}
+.rolewas.ass{color:var(--red)}
+.tally{display:flex;justify-content:space-between;align-items:center;color:var(--muted);font-size:13px}
+
+/* simulator */
+.sim{background:var(--panel);border:1px dashed var(--line-strong);border-radius:16px;padding:14px 16px;display:grid;gap:14px;font-size:13px;min-width:0}
+.sim h3{font-size:14px;letter-spacing:.1em;text-transform:uppercase}
+.sim p{color:var(--muted)}
+.sgroup{display:grid;gap:8px}
+.sgroup h4{font:600 11px var(--display);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.srow{display:flex;flex-wrap:wrap;gap:6px}
+.sbtn{border:1px solid var(--line-strong);background:var(--panel-2);color:var(--fg);border-radius:8px;padding:7px 10px;font:500 12px var(--body);cursor:pointer}
+.sbtn:hover{border-color:var(--primary)}
+.sbtn[disabled]{opacity:.4;cursor:not-allowed}
+.stat{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;font-family:var(--mono);font-size:12px;margin:0}
+.stat dt{color:var(--muted)}
+.stat dd{margin:0}
+.switch{display:flex;align-items:center;gap:8px;cursor:pointer}
+.switch select{background:var(--bg);color:var(--fg);border:1px solid var(--line-strong);border-radius:6px;padding:3px 6px;font:inherit}
+
+/* toasts */
+.toasts{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);display:grid;gap:6px;z-index:50;pointer-events:none;width:max-content;max-width:calc(100vw - 32px)}
+.toast{background:var(--fg);color:var(--bg);padding:9px 14px;border-radius:10px;font-size:13px;font-weight:500;box-shadow:var(--shadow);animation:tin .2s ease}
+@keyframes tin{from{transform:translateY(8px);opacity:0}to{transform:none;opacity:1}}
+
+@media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="shell">
+  <main class="phone" aria-label="Schermo del giocatore">
+    <header class="topbar" id="topbar" hidden>
+      <div class="tb-left"><span class="tb-k">Stanza</span><b id="tbCode" class="tb-code"></b></div>
+      <div class="tb-right"><span id="tbName" class="tb-name"></span><span id="tbDead" class="tag dead" hidden>Morto</span><button class="btn tb-exit" data-act="askLeave" aria-label="Esci dalla stanza">Esci</button></div>
+    </header>
+    <div class="taskbar" id="taskbar" hidden>
+      <div class="lbl"><span>Task completate</span><span id="tbCount" class="mono">0 / 0</span></div>
+      <div class="rail" role="progressbar" aria-label="Task completate" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="tbRail"><div class="fill" id="tbFill"></div></div>
+    </div>
+    <section class="screen" id="screen"></section>
+    <div class="overlay" id="overlay" hidden></div>
+  </main>
+  <aside class="sim" id="sim" aria-label="Simulatore"></aside>
+</div>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<script>
+(function(){
+'use strict';
+const TASKS=[
+  "Vai in cucina e bevi un bicchiere d'acqua",
+  "Tocca tutte le maniglie delle porte del piano",
+  "Fai 10 squat davanti a un altro giocatore",
+  "Conta ad alta voce fino a 20 in un'altra stanza",
+  "Spegni e riaccendi una luce tre volte",
+  "Fai il giro completo del tavolo",
+  "Chiedi l'ora a un altro giocatore",
+  "Scrivi il tuo nome su un foglio e lascialo sul tavolo",
+  "Riempi un bicchiere e portalo in un'altra stanza",
+  "Trova un oggetto rosso e mostralo a qualcuno"
+];
+const FAKE_NAMES=["Giulia","Marco","Sara","Luca","Elena","Davide","Chiara","Andrea"];
+const COOLDOWN=10*60*1000;     // Emergency meeting: 10 min dall'ultima pressione di chiunque
+const TASK_MS=2*60*1000;       // timer della task spuntata
+const KILL_CD=5*60*1000;       // Uccidi: 5 min di attesa a inizio partita, dopo ogni uso e dopo ogni riunione
+const TASKS_DEFAULT=4;         // valore iniziale del numero scelto dall'host in sala d'attesa
+const TASKS_MIN=1;             // nessun tetto massimo: l'host sceglie liberamente
+const RESULT_MS=8000;          // quanto resta a schermo l'esito della votazione
+const MIN_PLAYERS=3;
+const MAX_FAKE_JOIN=5;
+const ICON={
+  report:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 2.5 20h19L12 3z"/><path d="M12 9v5"/><path d="M12 17.5h.01"/></svg>',
+  bell:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 16v-5a6 6 0 0 1 12 0v5l1.5 2h-15L6 16z"/><path d="M10 21a2 2 0 0 0 4 0"/><path d="M12 3v2"/></svg>',
+  check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg>'
+};
+
+let S=fresh();
+let fakeSeq=0;
+function fresh(){return{screen:'home',name:'',joinCode:'',roomCode:'',isHost:false,players:[],tasksDone:0,tasksTotal:0,lastEmergencyAt:null,lastEmergencyBy:null,myTask:null,meeting:null,timeOffset:0,autoJoin:true,nImpostors:1,lastBump:0,winner:null,winReason:null,endAt:null,tasksPerPlayer:TASKS_DEFAULT,confirmLeave:false,confirmDead:false,killReadyAt:null,killVisible:false};}
+const LONG_PRESS_MS=650;       // pressione lunga sulla barra in alto: mostra/nasconde Uccidi (solo per gli assassini, invisibile per gli altri)
+const killLeft=()=>S.killReadyAt?Math.max(0,S.killReadyAt-now()):0;
+/* Barra piena = (numero di civili × numero scelto dall'host) / 2, arrotondato per eccesso */
+function impostorCount(n){return Math.min(S.nImpostors,Math.max(1,n-2));}
+function tasksTarget(){const civ=S.players.filter(p=>p.role==='civile').length||(S.players.length-impostorCount(S.players.length));return Math.max(1,Math.ceil(civ*S.tasksPerPlayer/2));}
+const END_MS=10000;            // quanto resta a schermo la scritta di vittoria prima di tornare nella stanza
+const assassinsAlive=()=>S.players.filter(p=>p.alive&&p.role==='assassino').length;
+function computeWinner(){if(!S.tasksTotal)return null;const a=assassinsAlive();const c=alive().length-a;if(a===0)return 'civili';if(a>=c)return 'assassini';return null;}
+const now=()=>Date.now()+S.timeOffset;
+const $=(s,r)=>(r||document).querySelector(s);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt=ms=>{const t=Math.max(0,Math.ceil(ms/1000));return Math.floor(t/60)+':'+String(t%60).padStart(2,'0');};
+const me=()=>S.players.find(p=>p.id==='me');
+const alive=()=>S.players.filter(p=>p.alive);
+const byId=id=>S.players.find(p=>p.id===id);
+const rnd=a=>a[Math.floor(Math.random()*a.length)];
+const nameOf=id=>{const p=byId(id);return p?p.name:'?';};
+const roleLabel=r=>r==='assassino'?'Assassino':'Civile';
+const roleCls=r=>r==='assassino'?'ass':'civ';
+function genCode(){const A='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';let c='';for(let i=0;i<5;i++)c+=A[Math.floor(Math.random()*A.length)];return c;}
+function addFake(opts){opts=opts||{};const used=new Set(S.players.map(p=>p.name));const avail=FAKE_NAMES.filter(n=>!used.has(n));if(!avail.length)return null;const p={id:'p'+(++fakeSeq),name:avail[0],role:null,alive:true,isHost:!!opts.isHost};S.players.push(p);return p;}
+function newTask(exclude){const pool=TASKS.filter(t=>t!==exclude);return{text:rnd(pool),checkedAt:null};}
+function cooldownLeft(){return S.lastEmergencyAt==null?0:Math.max(0,S.lastEmergencyAt+COOLDOWN-now());}
+function bumpProgress(){S.tasksDone=Math.min(S.tasksTotal,S.tasksDone+1);S.lastBump=Date.now();if(S.tasksTotal&&S.tasksDone>=S.tasksTotal&&S.screen!=='end')finishGame('civili','tasks');}
+function finishGame(winner,reason){S.winner=winner;S.winReason=reason;S.meeting=null;S.endAt=now()+END_MS;S.screen='end';}
+function checkWinAfterDeath(){if(!S.tasksTotal||S.screen==='end'||S.meeting)return;const w=computeWinner();if(w)finishGame(w,w==='civili'?'assassini':'maggioranza');}
+function hueOf(p){const i=S.players.indexOf(p);return [210,340,30,140,280,60,180,0][i%8];}
+function avatar(p){return '<span class="avatar" style="--h:'+hueOf(p)+'" aria-hidden="true">'+esc(p.name[0].toUpperCase())+'</span>';}
+
+function assignRoles(force){
+  const ps=S.players.slice();
+  for(let i=ps.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));const t=ps[i];ps[i]=ps[j];ps[j]=t;}
+  const n=impostorCount(ps.length);
+  S.players.forEach(p=>{p.role='civile';p.alive=true;p.cause=null;});
+  ps.slice(0,n).forEach(p=>{p.role='assassino';});
+  if(force){const m=me();if(m.role!==force){const swap=S.players.find(p=>p.id!=='me'&&p.role===force);if(swap){swap.role=m.role;m.role=force;}}}
+  S.tasksTotal=tasksTarget();S.tasksDone=0;S.myTask=newTask();
+  S.killReadyAt=now()+KILL_CD;S.killVisible=false;
+  S.lastEmergencyAt=null;S.lastEmergencyBy=null;S.meeting=null;
+}
+function startMeeting(type,callerId){S.meeting={type:type,callerId:callerId,votes:{},result:null,endsAt:null};S.screen='meeting';render();}
+function checkMeeting(){
+  const m=S.meeting;if(!m||m.result)return;
+  const need=alive().length;if(Object.keys(m.votes).length<need)return;
+  const counts={};Object.values(m.votes).forEach(v=>{counts[v]=(counts[v]||0)+1;});
+  let max=0;Object.values(counts).forEach(c=>{if(c>max)max=c;});
+  const top=Object.keys(counts).filter(k=>counts[k]===max);
+  if(top.length!==1||top[0]==='skip'){m.result={eliminated:null,tie:top.length>1,counts:counts};}
+  else{const p=byId(top[0]);p.alive=false;p.cause='eliminato';m.result={eliminated:p.id,role:p.role,counts:counts};}
+  m.endsAt=now()+RESULT_MS;
+}
+function endMeeting(){S.meeting=null;const w=computeWinner();if(w){finishGame(w,w==='civili'?'assassini':'maggioranza');}else{S.screen='playing';S.killReadyAt=now()+KILL_CD;S.killVisible=false;}render();}
+function needName(){if(S.name.trim())return true;toast('Scrivi prima il tuo nome');const i=$('#nameInput');if(i)i.focus();return false;}
+function newRoom(){const keep={name:S.name.trim(),autoJoin:S.autoJoin,nImpostors:S.nImpostors,tasksPerPlayer:S.tasksPerPlayer};S=Object.assign(fresh(),keep);}
+function buildScenario(forceRole){
+  if(!S.name.trim())S.name='Tu';
+  newRoom();S.roomCode=genCode();S.isHost=true;
+  S.players=[{id:'me',name:S.name,role:null,alive:true,isHost:true}];
+  for(let i=0;i<4;i++)addFake();
+  assignRoles(forceRole);
+  S.tasksDone=Math.floor(S.tasksTotal*0.3);
+  S.screen='playing';
+}
+
+const A={
+  createRoom(){if(!needName())return;newRoom();S.roomCode=genCode();S.isHost=true;S.players=[{id:'me',name:S.name,role:null,alive:true,isHost:true}];S.screen='waiting';render();},
+  joinRoom(){if(!needName())return;const code=S.joinCode.trim().toUpperCase();if(code.length<4){toast('Inserisci il codice della stanza (5 caratteri)');const i=$('#codeInput');if(i)i.focus();return;}
+    newRoom();S.roomCode=code;S.isHost=false;addFake({isHost:true});addFake();S.players.push({id:'me',name:S.name,role:null,alive:true,isHost:false});S.screen='waiting';render();},
+  copyCode(){const code=S.roomCode;const done=()=>toast('Codice copiato');const fail=()=>{const el=$('#codeText');if(el){const r=document.createRange();r.selectNodeContents(el);const sel=getSelection();sel.removeAllRanges();sel.addRange(r);}toast('Seleziona e copia il codice');};
+    try{navigator.clipboard.writeText(code).then(done,fail);}catch(e){fail();}},
+  startGame(){if(S.players.length<MIN_PLAYERS){toast('Servono almeno '+MIN_PLAYERS+' giocatori');return;}assignRoles();S.screen='role';render();},
+  taskNum(delta){if(!S.isHost||S.screen!=='waiting')return;S.tasksPerPlayer=Math.max(TASKS_MIN,S.tasksPerPlayer+Number(delta));render();},
+  continueGame(){S.screen='playing';render();},
+  checkTask(){if(!S.myTask||S.myTask.checkedAt!=null)return;S.myTask.checkedAt=now();bumpProgress();render();},
+  report(){if(!me().alive)return;startMeeting('report','me');},
+  emergency(){if(!me().alive||cooldownLeft()>0)return;S.lastEmergencyAt=now();S.lastEmergencyBy='me';startMeeting('emergency','me');},
+  vote(target){const m=S.meeting;if(!m||m.result||!me().alive||m.votes.me)return;m.votes.me=target;checkMeeting();render();},
+  backToGame(){endMeeting();},
+  newGame(){S.players.forEach(p=>{p.role=null;p.alive=true;p.cause=null;});S.killReadyAt=null;S.tasksTotal=0;S.tasksDone=0;S.myTask=null;S.meeting=null;S.winner=null;S.winReason=null;S.endAt=null;S.lastEmergencyAt=null;S.lastEmergencyBy=null;S.screen='waiting';render();},
+  askDead(){if(S.screen!=='playing'||!me().alive)return;S.confirmDead=true;render();},
+  cancelDead(){S.confirmDead=false;render();},
+  imDead(){S.confirmDead=false;const m=me();if(!m.alive)return;m.alive=false;m.cause='morto';toast('Sei fuori dalle votazioni per il resto della partita');checkWinAfterDeath();render();},
+  kill(){
+    const m=me();if(S.screen!=='playing'||m.role!=='assassino'||!m.alive)return;
+    if(killLeft()>0){toast('Uccidi è ancora in attesa: '+fmt(killLeft()));return;}
+    S.killReadyAt=now()+KILL_CD;
+    toast('Uccisione registrata: 5 minuti di attesa');render();},
+  askLeave(){S.confirmLeave=true;render();},
+  cancelLeave(){S.confirmLeave=false;render();},
+  leaveRoom(){const keep={name:S.name,autoJoin:S.autoJoin,nImpostors:S.nImpostors,tasksPerPlayer:S.tasksPerPlayer};S=Object.assign(fresh(),keep);render();},
+
+  /* --- simulatore --- */
+  simAddPlayer(){if(S.screen!=='waiting'){toast('I giocatori entrano solo in sala d\'attesa');return;}const p=addFake();if(!p){toast('Nomi finti esauriti');return;}toast(p.name+' si è unito');render();},
+  simHostStarts(){if(S.screen==='waiting'&&!S.isHost)A.startGame();},
+  simFakeLeave(){
+    const others=S.players.filter(p=>p.id!=='me');if(S.screen==='home'||!others.length){toast('Non c\'è nessun altro nella stanza');return;}
+    const p=rnd(others);S.players=S.players.filter(x=>x!==p);
+    if(p.isHost){const next=S.players[0];next.isHost=true;if(next.id==='me'){S.isHost=true;toast(p.name+' è uscito: ora l\'host sei tu');}else toast(p.name+' è uscito: ora l\'host è '+next.name);}
+    else toast(p.name+' è uscito dalla stanza');
+    if(S.meeting&&!S.meeting.result){delete S.meeting.votes[p.id];Object.keys(S.meeting.votes).forEach(k=>{if(S.meeting.votes[k]===p.id)delete S.meeting.votes[k];});checkMeeting();}
+    checkWinAfterDeath();
+    render();},
+  simLongPress(){const m=me();if(S.screen==='playing'&&m&&m.alive&&m.role==='assassino'){S.killVisible=!S.killVisible;render();}else toast('Per un civile la pressione lunga non fa nulla');},
+  simFakeDead(){if(S.screen!=='playing'){toast('Serve essere nella schermata di gioco');return;}const others=alive().filter(p=>p.id!=='me');if(!others.length){toast('Nessun altro giocatore vivo');return;}const p=rnd(others);p.alive=false;p.cause='morto';toast(p.name+' ha premuto «Sono morto»');checkWinAfterDeath();render();},
+  simToggleHost(){if(S.screen==='home')return;S.isHost=!S.isHost;S.players.forEach(p=>{p.isHost=false;});if(S.isHost)me().isHost=true;else{const f=S.players.find(p=>p.id!=='me');if(f)f.isHost=true;}render();},
+  simFakeTask(){if(!S.tasksTotal){toast('La partita non è ancora iniziata');return;}const others=alive().filter(p=>p.id!=='me');const who=others.length?rnd(others).name:'Qualcuno';bumpProgress();toast(who+' ha spuntato una task');render();},
+  simFakeEmergency(){if(S.screen!=='playing'){toast('Serve essere nella schermata di gioco');return;}if(cooldownLeft()>0){toast('Il pulsante è in attesa per tutti: ancora '+fmt(cooldownLeft()));return;}const others=alive().filter(p=>p.id!=='me');if(!others.length)return;const p=rnd(others);S.lastEmergencyAt=now();S.lastEmergencyBy=p.id;startMeeting('emergency',p.id);},
+  simFakeReport(){if(S.screen!=='playing'){toast('Serve essere nella schermata di gioco');return;}const others=alive().filter(p=>p.id!=='me');if(!others.length)return;startMeeting('report',rnd(others).id);},
+  simFakeVotes(){const m=S.meeting;if(!m||m.result){toast('Nessuna votazione in corso');return;}const cands=alive();alive().filter(p=>p.id!=='me'&&!m.votes[p.id]).forEach(v=>{if(Math.random()<0.2){m.votes[v.id]='skip';}else{const pool=cands.filter(c=>c.id!==v.id);m.votes[v.id]=pool.length?rnd(pool).id:'skip';}});checkMeeting();render();},
+  simSkip(ms){S.timeOffset+=Number(ms);tick();renderSim();},
+  simScenario(kind){
+    if(kind==='civile')buildScenario('civile');
+    else if(kind==='assassino')buildScenario('assassino');
+    else if(kind==='meeting'){buildScenario('civile');const others=S.players.filter(p=>p.id!=='me');const caller=others[0];S.lastEmergencyAt=now();S.lastEmergencyBy=caller.id;S.meeting={type:'emergency',callerId:caller.id,votes:{},result:null,endsAt:null};S.meeting.votes[others[0].id]=others[1].id;S.meeting.votes[others[1].id]='skip';S.screen='meeting';}
+    else if(kind==='finale'){
+      buildScenario('civile');
+      const ass=S.players.filter(p=>p.role==='assassino');ass.slice(1).forEach(p=>{p.alive=false;});
+      const last=ass[0];const others=alive().filter(p=>p.id!=='me'&&p.id!==last.id);
+      S.lastEmergencyAt=now();S.lastEmergencyBy=others[0].id;
+      S.meeting={type:'emergency',callerId:others[0].id,votes:{},result:null,endsAt:null};
+      others.forEach(p=>{S.meeting.votes[p.id]=last.id;});S.meeting.votes[last.id]=others[0].id;
+      S.screen='meeting';
+    }
+    else if(kind==='barra'){buildScenario('civile');S.tasksDone=S.tasksTotal-1;}
+    else if(kind==='finale-ass'){
+      buildScenario('civile');
+      const others=S.players.filter(p=>p.id!=='me');
+      others.forEach((p,i)=>{p.role=i<2?'assassino':'civile';p.alive=true;});
+      others[3].alive=false;            // un civile già eliminato in una riunione precedente
+      const a1=others[0],a2=others[1],c=others[2];
+      S.lastEmergencyAt=now();S.lastEmergencyBy=c.id;
+      S.meeting={type:'emergency',callerId:c.id,votes:{},result:null,endsAt:null};
+      S.meeting.votes[a1.id]=c.id;S.meeting.votes[a2.id]=c.id;S.meeting.votes[c.id]=a1.id;
+      S.screen='meeting';
+    }
+    render();},
+  simReset(){const keep={autoJoin:S.autoJoin,nImpostors:S.nImpostors};S=Object.assign(fresh(),keep);render();}
+};
+
+/* ---------- viste ---------- */
+const V={
+  home(){return `
+    <div style="display:grid;gap:8px">
+      <p class="eyebrow">Prototipo · solo pulsanti</p>
+      <h1>Sala Sospetti</h1>
+      <p class="lead">Un gioco di deduzione da fare nella stessa stanza, ognuno col proprio telefono.</p>
+    </div>
+    <label class="field"><span>Il tuo nome</span><input type="text" id="nameInput" maxlength="16" placeholder="Come ti chiamano gli altri?" value="${esc(S.name)}" autocomplete="off"></label>
+    <div class="card">
+      <h2>Crea una stanza</h2>
+      <p>Ricevi un codice da dare agli altri. Sarai tu l'host e deciderai quando iniziare.</p>
+      <button class="btn primary big" data-act="createRoom">Crea stanza</button>
+    </div>
+    <div class="divider"><span>oppure</span></div>
+    <div class="card">
+      <h2>Entra con un codice</h2>
+      <p>Chiedi il codice a chi ha creato la stanza.</p>
+      <div class="row"><input type="text" id="codeInput" class="code-input" maxlength="5" placeholder="ABCDE" autocapitalize="characters" autocomplete="off" value="${esc(S.joinCode)}"><button class="btn" data-act="joinRoom">Entra</button></div>
+    </div>`;},
+
+  waiting(){
+    const host=S.players.find(p=>p.isHost);
+    const list=S.players.map(p=>`<li class="player">${avatar(p)}<span class="pname">${esc(p.name)}${p.id==='me'?'<span class="tag you">Tu</span>':''}</span>${p.isHost?'<span class="tag host">Host</span>':''}</li>`).join('');
+    const foot=S.isHost
+      ?`<button class="btn green big" data-act="startGame" ${S.players.length<MIN_PLAYERS?'disabled':''}>Start</button>
+        <p class="small muted" style="text-align:center">${S.players.length<MIN_PLAYERS?'Servono almeno '+MIN_PLAYERS+' giocatori per iniziare.':'Quando premi Start, ognuno vedrà il proprio ruolo sul suo telefono.'}</p>`
+      :`<div class="notice">Solo l'host (<b>${esc(host?host.name:'?')}</b>) può avviare la partita.</div>`;
+    return `
+    <div style="display:grid;gap:4px"><p class="eyebrow">Sala d'attesa</p><h2>Aspettiamo gli altri</h2></div>
+    <div class="codebox"><div><span class="k">Codice stanza</span><b id="codeText">${esc(S.roomCode)}</b></div><button class="btn" data-act="copyCode">Copia</button></div>
+    <div class="setting">
+      <div class="setting-main">
+        <span class="k">Numero task</span>
+        ${S.isHost
+          ?`<div class="stepper"><button class="btn" data-act="taskNum" data-arg="-1" ${S.tasksPerPlayer<=TASKS_MIN?'disabled':''} aria-label="Diminuisci">−</button><input type="number" id="taskNumInput" class="num" min="${TASKS_MIN}" step="1" inputmode="numeric" value="${S.tasksPerPlayer}" aria-label="Numero task"><button class="btn" data-act="taskNum" data-arg="1" aria-label="Aumenta">+</button></div>`
+          :`<b class="mono big-num">${S.tasksPerPlayer}</b>`}
+      </div>
+      <p class="small muted">${S.isHost?'Lo scegli tu. ':'Lo sceglie l\'host. '}Barra piena con <b id="taskTarget">${tasksTarget()}</b> spunte (civili × <span id="taskNumEcho">${S.tasksPerPlayer}</span> ÷ 2, con ${S.players.length} giocatori e ${impostorCount(S.players.length)} assassin${impostorCount(S.players.length)===1?'o':'i'}).</p>
+    </div>
+    <div style="display:grid;gap:8px">
+      <div class="tally"><span>Giocatori connessi</span><span class="mono">${S.players.length}</span></div>
+      <ul class="players">${list}</ul>
+      <p class="small muted waiting-dots">In attesa di altri giocatori</p>
+    </div>
+    <div style="margin-top:auto;display:grid;gap:8px">${foot}</div>`;},
+
+  role(){
+    const m=me();const ass=S.players.filter(p=>p.role==='assassino');
+    const isAss=m.role==='assassino';
+    const mates=ass.filter(p=>p.id!=='me').map(p=>p.name);
+    const desc=isAss
+      ?`Elimina i civili senza farti scoprire. Dopo ogni eliminazione premi «Uccidi»: chi elimini premerà «Sono morto».<br><b>Tieni premuta la barra in alto</b> (dove c'è il codice stanza) per far apparire o sparire il tasto Uccidi: per gli altri quel gesto non fa nulla.${mates.length?'<br>Complici: <b>'+esc(mates.join(', '))+'</b>':''}`
+      :`Completa le task e scopri chi sono gli assassini. Se vieni eliminato, premi «Sono morto».<br>Tra voi ${ass.length===1?"c'è <b>1 assassino</b>":'ci sono <b>'+ass.length+' assassini</b>'}.`;
+    return `
+    <div class="reveal ${roleCls(m.role)}">
+      <p class="eyebrow">Il tuo ruolo</p>
+      <h2>${roleLabel(m.role)}</h2>
+      <p>${desc}</p>
+    </div>
+    <p class="small muted" style="text-align:center">Non mostrare lo schermo agli altri.</p>
+    <div style="margin-top:auto"><button class="btn primary big" data-act="continueGame">Ho capito</button></div>`;},
+
+  playing(){
+    const m=me();const dead=!m.alive;const left=cooldownLeft();
+    const t=S.myTask;const on=t&&t.checkedAt!=null;
+    const lastBy=S.lastEmergencyBy?(S.lastEmergencyBy==='me'?'te':nameOf(S.lastEmergencyBy)):null;
+    const banner=m.cause==='eliminato'?'Sei stato eliminato dalla votazione.':'Sei morto.';
+    const isAss=m.role==='assassino';const kl=killLeft();
+    const killPanel=(isAss&&!dead&&S.killVisible)?`
+    <div class="kill">
+      <div class="kill-head"><p class="eyebrow">Solo tu vedi questo riquadro</p><span class="sub mono" id="killSub">${kl>0?'pronto tra '+fmt(kl):'pronto'}</span></div>
+      <button class="btn danger big" id="killBtn" data-act="kill" ${kl>0?'disabled':''}>Uccidi</button>
+      <p class="small muted">Premilo dopo ogni eliminazione: fa partire i 5 minuti di attesa. Tieni premuta la barra in alto per nasconderlo.</p>
+    </div>`:'';
+    return `
+    ${dead?`<div class="notice warn">${banner} Puoi continuare a fare le task, ma non puoi più segnalare né votare.</div>`:''}
+    <div class="actions">
+      <div class="action">
+        <button class="round report" data-act="report" ${dead?'disabled':''} aria-label="Report">${ICON.report}</button>
+        <span class="lbl">Report</span>
+        <span class="sub">${dead?'non disponibile':'sempre disponibile'}</span>
+      </div>
+      <div class="action">
+        <button class="round emergency" id="emBtn" data-act="emergency" ${(dead||left>0)?'disabled':''} aria-label="Emergency meeting">${ICON.bell}</button>
+        <span class="lbl">Emergency meeting</span>
+        <span class="sub" id="emSub">${dead?'non disponibile':(left>0?'disponibile tra '+fmt(left):'disponibile')}</span>
+      </div>
+    </div>
+    ${lastBy?`<p class="small muted" style="text-align:center">Ultima riunione d'emergenza convocata da ${esc(lastBy)}.</p>`:''}
+    <div class="task">
+      <div><p class="eyebrow">Task</p><p class="ttext">${esc(t?t.text:'')}</p></div>
+      <button class="check ${on?'on':''}" data-act="checkTask" ${on?'disabled':''} aria-label="${on?'Task in corso':'Segna la task come fatta'}">
+        ${on?ICON.check+'<span class="timer" id="taskTimer">'+fmt(t.checkedAt+TASK_MS-now())+'</span>':'<span class="hint">Fatto</span>'}
+      </button>
+    </div>
+    <p class="small muted">${on?'Prossima task tra due minuti.':'Spunta il riquadro quando hai finito: la barra verde cresce per tutti.'}</p>
+    ${killPanel}
+    <div style="margin-top:auto;display:grid;gap:6px">
+      <button class="btn big dead-btn" data-act="askDead" ${dead?'disabled':''}>${dead?'Sei fuori dalla partita':'Sono morto'}</button>
+      ${dead?'':'<p class="small muted" style="text-align:center">Premilo se un assassino ti ha eliminato: uscirai dalle votazioni.</p>'}
+    </div>`;},
+
+  meeting(){
+    const m=S.meeting;const my=me();const meAlive=my.alive;const myVote=m.votes.me;
+    const title=m.type==='emergency'?"Riunione d'emergenza":'Segnalazione';
+    const by=m.callerId==='me'?'te':nameOf(m.callerId);
+    const voted=Object.keys(m.votes).length;const need=alive().length;
+    const rows=alive().map(p=>{
+      const isMe=p.id==='me';const hasVoted=!!m.votes[p.id];
+      const can=!m.result&&meAlive&&!myVote&&!isMe;
+      const count=m.result?Object.values(m.votes).filter(v=>v===p.id).length:null;
+      const right=m.result
+        ?`<span class="votes">${count} ${count===1?'voto':'voti'}</span>`
+        :`<span class="voted ${hasVoted?'yes':''}" title="${hasVoted?'ha votato':'non ha ancora votato'}">${hasVoted?ICON.check:'…'}</span>${isMe?'':`<button class="btn vbtn" data-act="vote" data-arg="${p.id}" ${can?'':'disabled'}>Vota</button>`}`;
+      return `<li class="player ${m.result&&m.result.eliminated===p.id?'dead':''}">${avatar(p)}<span class="pname">${esc(p.name)}${isMe?'<span class="tag you">Tu</span>':''}</span>${right}</li>`;
+    }).join('');
+    const deadList=S.players.filter(p=>!p.alive&&!(m.result&&m.result.eliminated===p.id)).map(p=>p.name);
+    let bottom='';
+    if(m.result){
+      const r=m.result;
+      const w=computeWinner();
+      bottom=`<div class="result">
+        ${r.eliminated
+          ?`<h2>${esc(nameOf(r.eliminated))} è stato eliminato</h2><p class="rolewas ${roleCls(r.role)}">Era un ${roleLabel(r.role)}</p>`
+          :`<h2>Nessuno è stato eliminato</h2><p class="muted">${r.tie?'Parità di voti.':'La maggioranza ha saltato il voto.'}</p>`}
+        ${w==='civili'?'<p class="small" style="color:var(--green)">Era l\'ultimo assassino in gioco.</p>':''}
+        ${w==='assassini'?'<p class="small" style="color:var(--red)">Gli assassini ora sono tanti quanti i civili rimasti.</p>':''}
+        <p class="small muted">${w?'Fine partita tra':'Si torna in partita tra'} <span class="mono" id="meetTimer">${Math.ceil((m.endsAt-now())/1000)}</span> s</p>
+        <button class="btn" data-act="backToGame">${w?'Vai al risultato':'Torna subito'}</button>
+      </div>`;
+    }else{
+      bottom=`<div style="display:grid;gap:8px">
+        ${meAlive?(myVote?`<div class="notice">Hai votato${myVote==='skip'?' di saltare':' '+esc(nameOf(myVote))}. In attesa degli altri.</div>`:`<button class="btn big" data-act="vote" data-arg="skip">Salta il voto</button>`):'<div class="notice">Sei stato eliminato: osservi senza votare.</div>'}
+      </div>`;
+    }
+    return `
+    <div class="meet-head"><p class="eyebrow">${title}</p><h2>Chi è l'assassino?</h2><p class="muted small">Convocata da ${esc(by)}. ${m.type==='emergency'?'Il pulsante Emergency resta bloccato per 10 minuti.':''}</p></div>
+    <div class="tally"><span>Hanno votato</span><span class="mono">${voted} / ${need}</span></div>
+    <ul class="players">${rows}</ul>
+    ${deadList.length?`<p class="small muted">Fuori dalla partita: ${esc(deadList.join(', '))}</p>`:''}
+    ${m.result&&(m.result.counts.skip||0)?`<p class="small muted">Hanno saltato il voto: ${m.result.counts.skip}</p>`:''}
+    <div style="margin-top:auto">${bottom}</div>`;},
+
+  end(){
+    const civ=S.winner==='civili';
+    const roles=S.players.map(p=>`<li class="player ${p.alive?'':'dead'}">${avatar(p)}<span class="pname">${esc(p.name)}${p.id==='me'?'<span class="tag you">Tu</span>':''}</span><span class="tag ${roleCls(p.role)}">${roleLabel(p.role)}</span></li>`).join('');
+    return `
+    <div class="reveal ${civ?'civ':'ass'} win"><p class="eyebrow">Fine partita</p><h2>${civ?'I civili hanno vinto':'Gli assassini hanno vinto'}</h2><p>${civ?(S.winReason==='tasks'?'La barra delle task è piena: tutte le task sono state completate.':'Non ci sono più assassini in gioco.'):'Gli assassini sono tanti quanti i civili rimasti, o di più.'}</p></div>
+    <div style="display:grid;gap:8px"><p class="eyebrow">I ruoli erano</p><ul class="players">${roles}</ul></div>
+    <div style="margin-top:auto;display:grid;gap:8px">
+      <p class="small muted" style="text-align:center">Si torna nella stanza tra <span class="mono" id="endTimer">${Math.max(0,Math.ceil((S.endAt-now())/1000))}</span> s</p>
+      <button class="btn big" data-act="newGame">Torna subito</button>
+    </div>`;}
+};
+
+function renderTopbar(){
+  const m=me();
+  $('#tbCode').textContent=S.roomCode;$('#tbName').textContent=S.name;
+  // Nessun indizio sul ruolo fuori dalla schermata di assegnazione: la barra in alto mostra solo nome e stato.
+  $('#tbDead').hidden=!(m&&!m.alive);
+}
+function renderTaskbar(){
+  const pct=S.tasksTotal?Math.round(100*S.tasksDone/S.tasksTotal):0;
+  $('#tbFill').style.width=pct+'%';
+  $('#tbRail').setAttribute('aria-valuenow',pct);
+  $('#tbCount').textContent=S.tasksTotal?S.tasksDone+' / '+S.tasksTotal:'— / —';
+}
+function render(){
+  const inRoom=S.screen!=='home';
+  $('#topbar').hidden=!inRoom;$('#taskbar').hidden=!inRoom;
+  if(inRoom){renderTopbar();renderTaskbar();}
+  const sc=$('#screen');sc.innerHTML=V[S.screen]();sc.dataset.screen=S.screen;
+  const ov=$('#overlay');
+  if(S.confirmDead&&S.screen==='playing'){
+    ov.hidden=false;
+    ov.innerHTML=`<div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dlgTitle">
+      <h2 id="dlgTitle">Sei morto?</h2>
+      <p>Per il resto della partita non potrai votare né essere votato, e non potrai più segnalare o convocare riunioni. Le task puoi continuare a farle. Non si torna indietro.</p>
+      <div class="row"><button class="btn big" data-act="cancelDead">Annulla</button><button class="btn big danger" data-act="imDead">Sì, sono morto</button></div>
+    </div>`;
+  }else if(S.confirmLeave&&inRoom){
+    const inGame=!!S.tasksTotal&&S.screen!=='end';
+    ov.hidden=false;
+    ov.innerHTML=`<div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dlgTitle">
+      <h2 id="dlgTitle">Uscire dalla stanza?</h2>
+      <p>${inGame?'La partita continua senza di te: non potrai più rientrare in questa partita.':'Tornerai alla schermata iniziale.'}${S.isHost&&S.players.length>1?' Il ruolo di host passerà a un altro giocatore.':''}</p>
+      <div class="row"><button class="btn big" data-act="cancelLeave">Resta</button><button class="btn big danger" data-act="leaveRoom">Esci</button></div>
+    </div>`;
+  }else{ov.hidden=true;ov.innerHTML='';}
+  renderSim();tick();
+}
+
+const SCREEN_NAMES={home:'Home',waiting:"Sala d'attesa",role:'Rivelazione ruolo',playing:'Partita',meeting:'Riunione',end:'Fine partita'};
+function renderSim(){
+  const m=me();const inGame=!!S.tasksTotal;
+  const off=S.timeOffset;const offTxt=off?'+'+Math.round(off/60000)+' min':'reale';
+  $('#sim').innerHTML=`
+    <div><h3>Simulatore</h3><p>Solo per il prototipo: finge gli altri giocatori e il server. Nel sito vero sparisce.</p></div>
+    <dl class="stat">
+      <dt>Schermata</dt><dd>${SCREEN_NAMES[S.screen]}</dd>
+      <dt>Ruolo</dt><dd>${S.screen==='home'?'—':(S.isHost?'host':'giocatore')}${m&&m.role?' · '+roleLabel(m.role).toLowerCase():''}${m&&!m.alive?' · eliminato':''}</dd>
+      <dt>Orologio</dt><dd id="simClock">${offTxt}</dd>
+      <dt>Emergency</dt><dd id="simCool">${inGame?(cooldownLeft()>0?'bloccato '+fmt(cooldownLeft()):'disponibile'):'—'}</dd>
+    </dl>
+    <div class="sgroup"><h4>Giocatori</h4>
+      <label class="switch"><input type="checkbox" id="autoJoin" ${S.autoJoin?'checked':''}> Gli altri si uniscono da soli in sala d'attesa</label>
+      <div class="srow">
+        <button class="sbtn" data-act="simAddPlayer" ${S.screen==='waiting'?'':'disabled'}>+ Fai entrare un giocatore</button>
+        <button class="sbtn" data-act="simToggleHost" ${S.screen==='home'?'disabled':''}>${S.isHost?'Non sono più l\'host':'Diventa host'}</button>
+        <button class="sbtn" data-act="simHostStarts" ${(S.screen==='waiting'&&!S.isHost)?'':'disabled'}>L'host preme Start</button>
+        <button class="sbtn" data-act="simFakeLeave" ${(S.screen!=='home'&&S.players.length>1)?'':'disabled'}>Qualcuno esce dalla stanza</button>
+      </div>
+    </div>
+    <div class="sgroup"><h4>Azioni degli altri</h4>
+      <div class="srow">
+        <button class="sbtn" data-act="simFakeTask" ${inGame?'':'disabled'}>Qualcuno spunta una task</button>
+        <button class="sbtn" data-act="simFakeEmergency" ${S.screen==='playing'?'':'disabled'}>Qualcuno preme Emergency</button>
+        <button class="sbtn" data-act="simFakeReport" ${S.screen==='playing'?'':'disabled'}>Qualcuno preme Report</button>
+        <button class="sbtn" data-act="simFakeDead" ${S.screen==='playing'?'':'disabled'}>Qualcuno preme «Sono morto»</button>
+        <button class="sbtn" data-act="simLongPress" ${S.screen==='playing'?'':'disabled'}>Pressione lunga sulla barra in alto</button>
+        <button class="sbtn" data-act="simFakeVotes" ${(S.meeting&&!S.meeting.result)?'':'disabled'}>Gli altri votano</button>
+      </div>
+    </div>
+    <div class="sgroup"><h4>Tempo (per non aspettare davvero)</h4>
+      <div class="srow">
+        <button class="sbtn" data-act="simSkip" data-arg="30000">+30 s</button>
+        <button class="sbtn" data-act="simSkip" data-arg="120000">+2 min</button>
+        <button class="sbtn" data-act="simSkip" data-arg="300000">+5 min</button>
+        <button class="sbtn" data-act="simSkip" data-arg="600000">+10 min</button>
+      </div>
+    </div>
+    <div class="sgroup"><h4>Scenari rapidi</h4>
+      <div class="srow">
+        <button class="sbtn" data-act="simScenario" data-arg="civile">Partita da civile</button>
+        <button class="sbtn" data-act="simScenario" data-arg="assassino">Partita da assassino</button>
+        <button class="sbtn" data-act="simScenario" data-arg="barra">Partita con barra quasi piena</button>
+        <button class="sbtn" data-act="simScenario" data-arg="meeting">Riunione in corso</button>
+        <button class="sbtn" data-act="simScenario" data-arg="finale">Riunione decisiva (vincono i civili)</button>
+        <button class="sbtn" data-act="simScenario" data-arg="finale-ass">Riunione decisiva (vincono gli assassini)</button>
+        <button class="sbtn" data-act="simReset">Ricomincia da capo</button>
+      </div>
+    </div>
+    <div class="sgroup"><h4>Regole del prototipo</h4>
+      <label class="switch">Assassini per partita <select id="nImp"><option value="1" ${S.nImpostors===1?'selected':''}>1</option><option value="2" ${S.nImpostors===2?'selected':''}>2</option></select></label>
+      <p>Barra piena con (civili × numero scelto dall'host) ÷ 2 spunte, assassini compresi · task di 2 min · Emergency ogni 10 min · Uccidi ogni 5 min (anche a inizio partita e dopo ogni riunione) · esito votazione a schermo per ${RESULT_MS/1000} s. I testi delle task sono esempi.</p>
+    </div>`;
+}
+
+function tick(){
+  let rerender=false;
+  if(S.myTask&&S.myTask.checkedAt!=null&&now()-S.myTask.checkedAt>=TASK_MS){S.myTask=newTask(S.myTask.text);rerender=true;}
+  if(S.meeting&&S.meeting.result&&now()>=S.meeting.endsAt){endMeeting();return;}
+  if(S.screen==='playing'){
+    const left=cooldownLeft();const b=$('#emBtn');const s=$('#emSub');const dead=!me().alive;
+    if(b&&!dead){const dis=left>0;if(b.disabled!==dis)b.disabled=dis;if(s)s.textContent=dis?'disponibile tra '+fmt(left):'disponibile';}
+    const tt=$('#taskTimer');if(tt&&S.myTask&&S.myTask.checkedAt!=null)tt.textContent=fmt(S.myTask.checkedAt+TASK_MS-now());
+    const kb=$('#killBtn'),ks=$('#killSub');if(kb){const kl=killLeft();kb.disabled=kl>0;if(ks)ks.textContent=kl>0?'pronto tra '+fmt(kl):'pronto';}
+  }
+  if(S.screen==='meeting'){const mt=$('#meetTimer');if(mt&&S.meeting&&S.meeting.result)mt.textContent=Math.max(0,Math.ceil((S.meeting.endsAt-now())/1000));}
+  if(S.screen==='end'){if(S.endAt&&now()>=S.endAt){A.newGame();return;}const et=$('#endTimer');if(et&&S.endAt)et.textContent=Math.max(0,Math.ceil((S.endAt-now())/1000));}
+  const f=$('#tbFill');if(f)f.classList.toggle('bump',Date.now()-S.lastBump<600);
+  const sc=$('#simCool');if(sc)sc.textContent=S.tasksTotal?(cooldownLeft()>0?'bloccato '+fmt(cooldownLeft()):'disponibile'):'—';
+  if(rerender)render();
+}
+function autoJoinTick(){
+  if(S.screen==='waiting'&&S.autoJoin&&S.players.length<MAX_FAKE_JOIN){const p=addFake();if(p){toast(p.name+' si è unito');render();}}
+}
+function toast(msg){const box=$('#toasts');const el=document.createElement('div');el.className='toast';el.textContent=msg;box.appendChild(el);setTimeout(()=>{el.remove();},2200);}
+
+document.addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(!b||b.disabled)return;const fn=A[b.dataset.act];if(fn)fn(b.dataset.arg);});
+document.addEventListener('input',e=>{
+  const t=e.target;
+  if(t.id==='nameInput')S.name=t.value;
+  else if(t.id==='codeInput'){const v=t.value.toUpperCase().replace(/[^A-Z0-9]/g,'');if(v!==t.value)t.value=v;S.joinCode=v;}
+  else if(t.id==='taskNumInput'){const n=parseInt(t.value,10);if(Number.isFinite(n)&&n>=TASKS_MIN){S.tasksPerPlayer=n;const tg=$('#taskTarget'),ec=$('#taskNumEcho');if(tg)tg.textContent=tasksTarget();if(ec)ec.textContent=n;}}
+  else if(t.id==='autoJoin')S.autoJoin=t.checked;
+  else if(t.id==='nImp')S.nImpostors=Number(t.value);
+});
+/* Pressione lunga sulla barra in alto: per l'assassino mostra/nasconde Uccidi; per chiunque altro non succede nulla,
+   così lo schermo del civile e quello dell'assassino (con il tasto nascosto) sono identici. */
+(function(){
+  let timer=null,sx=0,sy=0;
+  const bar=$('#topbar');
+  const cancel=()=>{if(timer){clearTimeout(timer);timer=null;}};
+  bar.addEventListener('pointerdown',e=>{
+    if(e.target.closest('button'))return;
+    sx=e.clientX;sy=e.clientY;cancel();
+    timer=setTimeout(()=>{timer=null;const m=me();if(S.screen==='playing'&&m&&m.alive&&m.role==='assassino'){S.killVisible=!S.killVisible;render();}},LONG_PRESS_MS);
+  });
+  bar.addEventListener('pointermove',e=>{if(timer&&(Math.abs(e.clientX-sx)>12||Math.abs(e.clientY-sy)>12))cancel();});
+  ['pointerup','pointercancel','pointerleave'].forEach(ev=>bar.addEventListener(ev,cancel));
+  bar.addEventListener('contextmenu',e=>e.preventDefault());
+})();
+document.addEventListener('change',e=>{
+  if(e.target.id==='taskNumInput'){const n=parseInt(e.target.value,10);S.tasksPerPlayer=Number.isFinite(n)&&n>=TASKS_MIN?n:TASKS_MIN;render();}
+});
+document.addEventListener('keydown',e=>{if(e.key!=='Enter')return;if(e.target.id==='codeInput')A.joinRoom();else if(e.target.id==='nameInput'){const c=$('#codeInput');if(c&&S.joinCode)A.joinRoom();else A.createRoom();}});
+
+function boot(data){
+  if(data&&data.S){try{S=Object.assign(fresh(),data.S);fakeSeq=S.players.length+10;}catch(e){S=fresh();}}
+  render();setInterval(tick,250);setInterval(autoJoinTick,1600);
+}
+try{if(window.claude&&window.claude.hot&&window.claude.hot.snapshot)window.claude.hot.snapshot(()=>({S:S}));}catch(e){}
+if(window.claude&&window.claude.hot&&window.claude.hot.ready)window.claude.hot.ready(boot);else boot((window.claude&&window.claude.hot&&window.claude.hot.data)||{});
+})();
+</script>
+
+</body>
+</html>
