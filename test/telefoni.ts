@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright-core'
 import type { Browser, CDPSession, Page } from 'playwright-core'
 import { encode } from 'uqr'
-import { LONG_PRESS_MS, generaCodice } from '../gioco/regole.ts'
+import { LONG_PRESS_MS, TASKS_DEFAULT, generaCodice } from '../gioco/regole.ts'
 
 const PORTA_SERVER = 8788
 const PORTA_SITO = 3100
@@ -604,9 +604,9 @@ async function ingressi() {
   await host.pagina.locator('.selettore').getByRole('button', { name: '2', exact: true }).tap()
   await bot[0].attendi(v => v.numeroAssassini === 2, 'due assassini')
   await host.pagina.getByRole('button', { name: 'Aumenta' }).tap()
-  await bot[0].attendi(v => v.numeroTask === 13, 'numero task +1')
+  await bot[0].attendi(v => v.numeroTask === TASKS_DEFAULT + 1, 'numero task +1')
   await host.pagina.getByRole('button', { name: 'Diminuisci' }).tap()
-  await bot[0].attendi(v => v.numeroTask === 12, 'numero task -1')
+  await bot[0].attendi(v => v.numeroTask === TASKS_DEFAULT, 'numero task -1')
 
   await host.pagina.getByRole('button', { name: 'Copia' }).tap()
   await host.pagina.locator('.avviso').waitFor()

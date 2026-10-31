@@ -58,7 +58,7 @@ export const LONG_PRESS_PX = 12 // movimento che annulla la pressione lunga
 // ---- Altre costanti ----
 export const MIN_PLAYERS = 3
 export const MAX_GIOCATORI = 20
-export const TASKS_DEFAULT = 12
+export const TASKS_DEFAULT = 32
 export const TASKS_MIN = 1 // nessun tetto massimo: l'host sceglie liberamente
 export const ASSASSINI_SCEGLIBILI = 2 // il selettore in sala offre 1 o 2
 export const NOME_MAX = 16
@@ -200,6 +200,7 @@ export type VistaRuolo = Comune & {
   ruolo: Ruolo
   assassini: number
   complici: string[]
+  riunioneAperta: boolean // chi legge il ruolo tiene ferma la riunione: deve saperlo anche dopo una ricarica
 }
 
 export type VistaPartita = Comune & {
@@ -712,6 +713,7 @@ export function vista(s: Stato, id: number, ora: number): Vista {
       ruolo: g.ruolo as Ruolo,
       assassini: s.assassiniPartita,
       complici: assassino ? s.giocatori.filter(x => x.ruolo === 'assassino' && x !== g).map(x => x.nome) : [],
+      riunioneAperta: s.fase === 'riunione',
     }
   }
 

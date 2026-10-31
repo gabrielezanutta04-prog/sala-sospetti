@@ -163,7 +163,7 @@ function ListaRegole() {
       </li>
       <li>
         Gli assassini eliminano di persona, di nascosto: prima di iniziare decidete insieme come, per esempio con un tocco sulla spalla. Chi
-        viene eliminato preme <b>Sono morto</b>: non vota più, ma può continuare a fare le task.
+        viene eliminato non dice chi è stato e preme <b>Sono morto</b>: non vota più, ma può continuare a fare le task.
       </li>
       <li>
         Gli assassini aprono il riquadro <b>Uccidi</b> tenendo premuta la barra in alto: per gli altri il gesto non fa nulla. Si elimina solo
@@ -660,6 +660,7 @@ function Impostazioni({ v, comanda }: { v: VistaSala; comanda: Comanda }) {
       <p className="nota">
         Più task scegli, più dura la partita. {barra}
         {v.maxAssassini < ASSASSINI_SCEGLIBILI && ' Per 2 assassini servono almeno 5 giocatori.'}
+        {v.giocatori.length >= 10 && v.numeroAssassini === 1 && ' Con 10 o più giocatori conviene sceglierne 2.'}
       </p>
     </section>
   )
@@ -761,12 +762,10 @@ function Ruolo({ v, comanda }: { v: VistaRuolo; comanda: Comanda }) {
   const assassino = v.ruolo === 'assassino'
   const pronto = useDopo(BLOCCO_RUOLO_MS)
 
-  // Finché si è qui, la fase avanza solo se qualcuno ha aperto una riunione: chi legge il ruolo la tiene ferma senza saperlo.
-  const [faseArrivo] = useState(v.f)
-  const riunione = v.f !== faseArrivo
+  // Chi legge il ruolo tiene ferma la riunione senza saperlo: segnale e avviso, come per chi è già in partita.
   useEffect(() => {
-    if (riunione) segnaleRiunione()
-  }, [riunione])
+    if (v.riunioneAperta) segnaleRiunione()
+  }, [v.riunioneAperta])
 
   return (
     <>
@@ -794,7 +793,7 @@ function Ruolo({ v, comanda }: { v: VistaRuolo; comanda: Comanda }) {
             </>
           ) : (
             <>
-              <p>Completa le task e scopri chi sono gli assassini. Se ti eliminano, premi «Sono morto».</p>
+              <p>Completa le task e scopri chi sono gli assassini. Se ti eliminano, premi «Sono morto» e non dire chi è stato.</p>
               <p>
                 Tra voi{' '}
                 {v.assassini === 1 ? (
@@ -814,7 +813,7 @@ function Ruolo({ v, comanda }: { v: VistaRuolo; comanda: Comanda }) {
         <p className="nota centrata">Non mostrare lo schermo agli altri. Le regole restano nel tasto Regole, qui in alto.</p>
       </main>
       <footer className="piede">
-        {riunione && (
+        {v.riunioneAperta && (
           <p className="avviso-fisso caldo" role="status">
             Hanno aperto una riunione: premi Ho capito e raggiungi gli altri.
           </p>

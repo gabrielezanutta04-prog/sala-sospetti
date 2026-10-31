@@ -291,7 +291,7 @@ const COMUNI = ['schermata', 'ora', 'f', 'codice', 'barra', 'traguardo', 'presen
 const CONVOCATA = ['tipo', 'daId', 'daNome']
 const CAMPI: Record<Schermata, string[]> = {
   sala: [...COMUNI, 'giocatori', 'numeroTask', 'numeroAssassini', 'maxAssassini', 'traguardoPrevisto', 'minGiocatori'],
-  ruolo: [...COMUNI, 'ruolo', 'assassini', 'complici'],
+  ruolo: [...COMUNI, 'ruolo', 'assassini', 'complici', 'riunioneAperta'],
   partita: [...COMUNI, 'task', 'taskFatta', 'taskDa', 'emergencyDa', 'emergencyDaId', 'emergencyDaNome'],
   riunione: [...COMUNI, ...CONVOCATA, 'giocatori', 'fuori', 'votati', 'totale', 'mioVoto', 'rivota'],
   esito: [...COMUNI, ...CONVOCATA, 'scadenza', 'votanti', 'fuori', 'eliminatoId', 'eliminatoNome', 'eliminatoRuolo', 'parita', 'salti', 'vincitore'],
