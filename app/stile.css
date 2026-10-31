@@ -1,0 +1,1605 @@
+/* Sala Sospetti: sala di controllo di notte. Telefono prima di tutto, cornice centrata solo su schermi larghi.
+   Le tinte sono già calcolate nei token: così il sito resta uguale anche sui telefoni meno recenti. */
+
+:root {
+  --bg: #0e1322;
+  --pannello: #161d30;
+  --pannello-2: #1e2740;
+  --linea: #2b3552;
+  --linea-forte: #3b4868;
+  --sagoma: #2b3552;
+  --testo: #eef1f8;
+  --tenue: #93a0bd;
+  --primario: #7ea4ff;
+  --primario-ink: #0b1430;
+  --verde: #3ccf6e;
+  --verde-ink: #07210f;
+  --rosso: #ff5265;
+  --rosso-ink: #2a0609;
+  --ambra: #ffb62e;
+  --ambra-ink: #2a1a02;
+
+  /* Tinte calcolate */
+  --verde-fondo: #213845;
+  --rosso-fondo: #342b44;
+  --rosso-bordo: #8a425a;
+  --ambra-fondo: #3a3136;
+  --primario-velo: rgba(126, 164, 255, 0.16);
+  --verde-alone: rgba(60, 207, 110, 0.6);
+  --alone: rgba(126, 164, 255, 0.09);
+  --alone-rosso: rgba(255, 82, 101, 0.13);
+  --alone-ambra: rgba(255, 182, 46, 0.12);
+  --velo: rgba(14, 19, 34, 0.84);
+  --ombra: 0 18px 48px rgba(0, 0, 0, 0.42);
+  --incavo: inset 0 -3px 0 rgba(0, 0, 0, 0.22);
+
+  /* Rilievo dei due pulsanti rotondi */
+  --rosso-alto: #ff929e;
+  --rosso-basso: #b33947;
+  --rosso-bordino: #802933;
+  --ambra-alto: #ffd384;
+  --ambra-basso: #b37f20;
+  --ambra-bordino: #805b17;
+
+  --f-titolo: var(--titolo), 'Trebuchet MS', sans-serif;
+  --f-mono: var(--mono), ui-monospace, Menlo, monospace;
+  --f-corpo: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+
+  /* Margini che rispettano la safe area sui quattro lati */
+  --sx: max(16px, env(safe-area-inset-left, 0px));
+  --dx: max(16px, env(safe-area-inset-right, 0px));
+  --su: env(safe-area-inset-top, 0px);
+  --giu: max(14px, env(safe-area-inset-bottom, 0px));
+  --raggio: 14px;
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']) {
+    --bg: #e9edf5;
+    --pannello: #ffffff;
+    --pannello-2: #f2f5fb;
+    --linea: #d3dae9;
+    --linea-forte: #b6c1d8;
+    --sagoma: #c3cde0;
+    --testo: #121a2d;
+    --tenue: #5b6782;
+    --primario: #2d5fe3;
+    --primario-ink: #ffffff;
+    --verde: #1f9f4f;
+    --verde-ink: #ffffff;
+    --rosso: #d8303f;
+    --rosso-ink: #ffffff;
+    --ambra: #e09200;
+    --ambra-ink: #1d1300;
+    --verde-fondo: #ddecea;
+    --rosso-fondo: #efe1e8;
+    --rosso-bordo: #d58d9d;
+    --ambra-fondo: #f4ead6;
+    --primario-velo: rgba(45, 95, 227, 0.12);
+    --verde-alone: rgba(31, 159, 79, 0.35);
+    --alone: rgba(45, 95, 227, 0.06);
+    --alone-rosso: rgba(216, 48, 63, 0.09);
+    --alone-ambra: rgba(224, 146, 0, 0.11);
+    --velo: rgba(233, 237, 245, 0.86);
+    --ombra: 0 18px 48px rgba(20, 30, 60, 0.14);
+    --incavo: inset 0 -3px 0 rgba(20, 30, 60, 0.1);
+    --rosso-alto: #e67882;
+    --rosso-basso: #97222c;
+    --rosso-bordino: #6c1820;
+    --ambra-alto: #ebb859;
+    --ambra-basso: #9d6600;
+    --ambra-bordino: #704900;
+    color-scheme: light;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  background: var(--bg);
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+body {
+  color: var(--testo);
+  font: 400 16px/1.42 var(--f-corpo);
+  -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
+}
+
+h1,
+h2,
+h3,
+p,
+ul {
+  margin: 0;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--f-titolo);
+  font-weight: 700;
+  line-height: 1.1;
+  text-wrap: balance;
+}
+
+h2 {
+  font-size: 24px;
+}
+
+ul {
+  list-style: none;
+  padding: 0;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+:where(button, input, summary):focus-visible {
+  outline: 2px solid var(--primario);
+  outline-offset: 2px;
+}
+
+/* ---- Guscio: barra in alto, barra verde, contenuto che scorre, azione fissa ---- */
+.guscio {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  background: radial-gradient(130% 46% at 50% 0%, var(--alone), transparent 72%), var(--pannello);
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.guscio input {
+  user-select: text;
+  -webkit-user-select: text;
+  -webkit-touch-callout: default;
+}
+
+.guscio[data-schermata='riunione'][data-tipo='report'],
+.guscio[data-schermata='esito'][data-tipo='report'] {
+  background: radial-gradient(130% 46% at 50% 0%, var(--alone-rosso), transparent 72%), var(--pannello);
+}
+
+.guscio[data-schermata='riunione'][data-tipo='emergency'],
+.guscio[data-schermata='esito'][data-tipo='emergency'] {
+  background: radial-gradient(130% 46% at 50% 0%, var(--alone-ambra), transparent 72%), var(--pannello);
+}
+
+.corpo {
+  grid-row: 3;
+  min-height: 0;
+  min-width: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 14px var(--dx) 14px var(--sx);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.corpo:last-child {
+  padding-bottom: var(--giu);
+}
+
+.piede {
+  grid-row: 4;
+  min-width: 0;
+  padding: 10px var(--dx) var(--giu) var(--sx);
+  display: grid;
+  gap: 8px;
+  border-top: 1px solid var(--linea);
+  background: var(--pannello);
+}
+
+.entrata {
+  animation: entra 0.28s ease both;
+}
+
+@keyframes entra {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+/* Da 600 px in su il gioco resta una colonna da telefono, appoggiata sul piano di lavoro */
+@media (min-width: 600px) and (min-height: 560px) {
+  body {
+    background:
+      radial-gradient(circle at 1px 1px, var(--linea) 1px, transparent 0) 0 0 / 26px 26px,
+      var(--bg);
+    display: grid;
+    place-items: center;
+    padding: 20px;
+  }
+
+  .guscio {
+    max-width: 480px;
+    height: min(calc(100vh - 40px), 880px);
+    height: min(calc(100dvh - 40px), 880px);
+    border: 1px solid var(--linea-forte);
+    border-radius: 22px;
+    box-shadow: var(--ombra);
+  }
+}
+
+/* ---- Barra in alto: è il punto della pressione lunga, identico per tutti ---- */
+.barra-alta {
+  grid-row: 1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: calc(6px + var(--su)) var(--dx) 6px var(--sx);
+  border-bottom: 1px solid var(--linea);
+  background: var(--pannello-2);
+  font-family: var(--f-titolo);
+  touch-action: none;
+}
+
+.ba-stanza {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex: none;
+}
+
+.ba-chiave {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--tenue);
+}
+
+.ba-codice {
+  font: 600 18px var(--f-mono);
+  letter-spacing: 0.16em;
+}
+
+.ba-io {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ba-nome {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 15px;
+}
+
+.tasto.esci {
+  flex: none;
+  min-height: 34px;
+  padding: 4px 10px;
+  border-radius: 9px;
+  font-size: 12px;
+  color: var(--tenue);
+  box-shadow: none;
+}
+
+/* ---- Barra verde: una riga sola, così resta sempre spazio per la lista ---- */
+.barra-verde {
+  grid-row: 2;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 7px var(--dx) 7px var(--sx);
+  border-bottom: 1px solid var(--linea);
+}
+
+.bv-etichetta {
+  font: 700 11px var(--f-titolo);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--tenue);
+}
+
+.bv-conta {
+  font: 600 13px var(--f-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.binario {
+  height: 12px;
+  overflow: hidden;
+  border: 1px solid var(--linea);
+  border-radius: 999px;
+  background: var(--bg);
+}
+
+.riempi {
+  position: relative;
+  height: 100%;
+  width: 0;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--verde);
+  box-shadow: 0 0 10px var(--verde-alone);
+  transition: width 0.5s ease;
+}
+
+.lampo {
+  position: absolute;
+  inset: 0;
+  background: #fff;
+  opacity: 0;
+  animation: lampo 0.6s ease;
+}
+
+@keyframes lampo {
+  0% {
+    opacity: 0.75;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* ---- Elementi comuni ---- */
+.occhiello {
+  font: 700 12px var(--f-titolo);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--tenue);
+}
+
+.nota {
+  font-size: 13.5px;
+  color: var(--tenue);
+}
+
+.centrata {
+  text-align: center;
+}
+
+.mono {
+  font-family: var(--f-mono);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.scheda {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--linea);
+  border-radius: var(--raggio);
+  background: var(--pannello-2);
+}
+
+.scheda p {
+  font-size: 14.5px;
+  color: var(--tenue);
+}
+
+.separatore {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font: 700 12px var(--f-titolo);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--tenue);
+}
+
+.separatore::before,
+.separatore::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--linea);
+}
+
+.avviso-fisso {
+  padding: 10px 12px;
+  border: 1px dashed var(--linea-forte);
+  border-radius: 12px;
+  font-size: 14px;
+  text-align: center;
+  color: var(--tenue);
+}
+
+.avviso-fisso.caldo {
+  border-color: var(--ambra);
+  color: var(--testo);
+}
+
+.errore {
+  padding: 10px 12px;
+  border: 1px solid var(--rosso-bordo);
+  border-radius: 12px;
+  background: var(--rosso-fondo);
+  font-size: 14.5px;
+}
+
+.tag {
+  flex: none;
+  padding: 2px 7px;
+  border: 1px solid var(--linea-forte);
+  border-radius: 999px;
+  font: 700 10.5px var(--f-titolo);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--tenue);
+  white-space: nowrap;
+}
+
+.tag.tu {
+  border-color: var(--primario);
+  color: var(--primario);
+}
+
+.tag.morto {
+  border-style: dashed;
+}
+
+/* ---- Tasti ---- */
+.tasto {
+  appearance: none;
+  -webkit-appearance: none;
+  min-height: 48px;
+  min-width: 0;
+  padding: 10px 16px;
+  overflow: hidden;
+  border: 1px solid var(--linea-forte);
+  border-radius: 12px;
+  background: var(--pannello-2);
+  box-shadow: var(--incavo);
+  color: var(--testo);
+  font: 700 15px var(--f-titolo);
+  letter-spacing: 0.04em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: transform 0.08s, border-color 0.15s, background 0.15s;
+}
+
+.tasto:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow: none;
+}
+
+.tasto:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+@media (hover: hover) {
+  .tasto:hover:not(:disabled) {
+    border-color: var(--primario);
+  }
+}
+
+.tasto.primario {
+  border-color: transparent;
+  background: var(--primario);
+  color: var(--primario-ink);
+}
+
+.tasto.verde {
+  border-color: transparent;
+  background: var(--verde);
+  color: var(--verde-ink);
+}
+
+.tasto.pericolo {
+  border-color: transparent;
+  background: var(--rosso);
+  color: var(--rosso-ink);
+}
+
+.tasto.grande {
+  width: 100%;
+  min-height: 54px;
+  font-size: 17px;
+}
+
+.tasto.piccolo {
+  min-height: 40px;
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+.tasto.tratteggiato {
+  border-style: dashed;
+  background: transparent;
+  box-shadow: none;
+  color: var(--tenue);
+}
+
+/* ---- Campi: sempre da 16 px o più, altrimenti iOS ingrandisce la pagina ---- */
+.campo {
+  display: grid;
+  gap: 6px;
+}
+
+.campo > span {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--tenue);
+}
+
+.input {
+  width: 100%;
+  min-width: 0;
+  padding: 13px 14px;
+  border: 1px solid var(--linea-forte);
+  border-radius: 12px;
+  background: var(--bg);
+  color: var(--testo);
+  font: 500 16px var(--f-corpo);
+}
+
+.input::placeholder {
+  color: var(--tenue);
+  opacity: 0.8;
+}
+
+.input.codice {
+  flex: 1;
+  width: 0;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.26em;
+  font: 600 20px var(--f-mono);
+}
+
+.riga {
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+  min-width: 0;
+}
+
+.riga > .tasto {
+  flex: none;
+}
+
+/* ---- Home ---- */
+html[data-rientro] .home {
+  visibility: hidden;
+}
+
+.home {
+  padding-top: calc(10px + var(--su));
+  padding-bottom: var(--giu);
+}
+
+.home-titolo {
+  display: grid;
+  gap: 6px;
+}
+
+.home-titolo h1 {
+  font-size: clamp(38px, 12.4vw, 46px);
+  letter-spacing: -0.005em;
+}
+
+.home-titolo h1 em {
+  font-style: normal;
+  color: var(--rosso);
+}
+
+.home-titolo .lead {
+  color: var(--tenue);
+}
+
+/* Il confronto all'americana: cinque sagome davanti al metro, una ti sta guardando */
+.confronto {
+  display: block;
+  width: 100%;
+  max-width: 400px;
+  height: auto;
+  margin-bottom: 4px;
+  overflow: visible;
+}
+
+.confronto .tacca {
+  stroke: var(--linea);
+  stroke-width: 1;
+}
+
+.confronto .misura {
+  fill: var(--tenue);
+  font: 600 8px var(--f-mono);
+}
+
+.confronto .sagoma {
+  fill: var(--sagoma);
+  animation: sale 0.5s cubic-bezier(0.2, 0.8, 0.25, 1) both;
+  animation-delay: calc(var(--n) * 70ms);
+}
+
+.confronto .lei .sagoma {
+  fill: var(--rosso);
+}
+
+.confronto .targa {
+  fill: var(--bg);
+  stroke: var(--linea-forte);
+}
+
+.confronto .numero {
+  fill: var(--tenue);
+  font: 600 9px var(--f-mono);
+  text-anchor: middle;
+}
+
+.confronto .lei .targa {
+  stroke: var(--rosso);
+}
+
+.confronto .lei .numero {
+  fill: var(--rosso);
+}
+
+.confronto .occhi {
+  fill: var(--bg);
+  animation: occhi 5s ease-in-out infinite;
+}
+
+@keyframes sale {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+
+@keyframes occhi {
+  0%,
+  86%,
+  100% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 0;
+  }
+  94% {
+    opacity: 1;
+  }
+  97% {
+    opacity: 0;
+  }
+}
+
+.regole {
+  border-top: 1px solid var(--linea);
+  padding-top: 10px;
+  font-size: 14.5px;
+  color: var(--tenue);
+}
+
+.regole summary {
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: 700 13px var(--f-titolo);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  list-style: none;
+}
+
+.regole summary::-webkit-details-marker {
+  display: none;
+}
+
+.regole summary::after {
+  content: '+';
+  font: 600 16px var(--f-mono);
+  color: var(--primario);
+}
+
+.regole[open] summary::after {
+  content: '\2212';
+}
+
+.regole ul {
+  display: grid;
+  gap: 6px;
+  padding: 4px 0 2px;
+}
+
+.regole b {
+  color: var(--testo);
+  font-weight: 600;
+}
+
+/* ---- Attesa del collegamento ---- */
+.attesa {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding-top: calc(14px + var(--su));
+}
+
+.punti::after {
+  content: '';
+  animation: punti 1.4s steps(4, end) infinite;
+}
+
+@keyframes punti {
+  0% {
+    content: '';
+  }
+  25% {
+    content: '.';
+  }
+  50% {
+    content: '..';
+  }
+  75% {
+    content: '...';
+  }
+}
+
+/* ---- Griglia dei giocatori: due colonne da 48 px, così 15 persone stanno in uno schermo ---- */
+.griglia {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: minmax(48px, auto);
+  gap: 6px;
+  min-width: 0;
+}
+
+.griglia.scorre {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  align-content: start;
+}
+
+.cella {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  min-width: 0;
+  padding: 5px 8px;
+  border: 1px solid var(--linea);
+  border-radius: 11px;
+  background: var(--pannello-2);
+}
+
+.cella-testo {
+  flex: 1;
+  display: grid;
+  min-width: 0;
+}
+
+.cella-nome {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14.5px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.cella-nota {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  color: var(--tenue);
+}
+
+.cella-nota .ospite {
+  color: var(--ambra);
+  font-weight: 600;
+}
+
+.cella-nota .civile {
+  color: var(--verde);
+  font-weight: 600;
+}
+
+.cella-nota .assassino {
+  color: var(--rosso);
+  font-weight: 600;
+}
+
+.cella-mio {
+  display: contents;
+}
+
+/* «Tu» sta sull'avatar: in due colonne lo spazio serve tutto al nome */
+.cella .tag.tu {
+  position: absolute;
+  left: 13px;
+  bottom: 3px;
+  padding: 0 4px;
+  border-color: var(--pannello-2);
+  background: var(--primario);
+  color: var(--primario-ink);
+  font-size: 8.5px;
+  line-height: 12px;
+  letter-spacing: 0.04em;
+}
+
+.cella.eliminata {
+  opacity: 0.6;
+}
+
+.cella.eliminata .cella-nome {
+  text-decoration: line-through;
+}
+
+.avatar {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  font: 700 14px var(--f-titolo);
+}
+
+.segno {
+  order: 1;
+  flex: none;
+  width: 18px;
+  text-align: center;
+  color: var(--tenue);
+}
+
+.segno.si {
+  color: var(--verde);
+}
+
+.segno svg {
+  display: block;
+  width: 17px;
+  height: 17px;
+}
+
+/* Copre tutta la cella: il tocco sceglie la persona, la conferma sta in basso */
+.copri {
+  appearance: none;
+  -webkit-appearance: none;
+  position: absolute;
+  inset: -1px;
+  padding: 0;
+  border: 0;
+  border-radius: 11px;
+  background: transparent;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.copri[aria-pressed='true'] {
+  background: var(--primario-velo);
+  box-shadow: inset 0 0 0 2px var(--primario);
+}
+
+/* Togli va a capo nella cella: compare di rado, e il nome di chi manca deve restare leggibile */
+.tasto.togli {
+  position: relative;
+  z-index: 1;
+  flex: 1 0 100%;
+  order: 2;
+  min-height: 34px;
+  padding: 4px 8px;
+  border-color: var(--rosso-bordo);
+  font-size: 11.5px;
+  box-shadow: none;
+}
+
+.conto {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13.5px;
+  color: var(--tenue);
+}
+
+.testa {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.elenco {
+  display: grid;
+  gap: 8px;
+}
+
+/* ---- Sala d'attesa ---- */
+.invito {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+  padding: 12px;
+  border: 1px solid var(--linea-forte);
+  border-radius: var(--raggio);
+  background: var(--bg);
+}
+
+.invito-dati {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.invito > .invito-dati:only-child {
+  grid-column: 1 / -1;
+}
+
+.codice-grande {
+  font: 600 clamp(25px, 8vw, 30px) var(--f-mono);
+  letter-spacing: 0.18em;
+}
+
+.invito-tasti {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.invito-tasti .tasto {
+  flex: 1 1 88px;
+}
+
+/* Il QR resta scuro su bianco in entrambi i temi: i lettori sbagliano con i colori invertiti */
+.qr {
+  width: 136px;
+  height: 136px;
+  padding: 8px;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.qr svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  fill: #0b1430;
+  shape-rendering: crispEdges;
+}
+
+.impostazioni {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 10px;
+  padding: 12px;
+  border: 1px solid var(--linea);
+  border-radius: var(--raggio);
+  background: var(--pannello-2);
+}
+
+.impostazioni .nota {
+  grid-column: 1 / -1;
+}
+
+.impostazione {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+  min-width: 0;
+}
+
+.valore {
+  font: 600 26px var(--f-mono);
+}
+
+.contatore,
+.selettore {
+  display: flex;
+  gap: 4px;
+  min-width: 0;
+}
+
+.contatore .tasto,
+.selettore .tasto {
+  flex: 1 1 0;
+  min-height: 46px;
+  padding: 0;
+  font-size: 19px;
+}
+
+.contatore .tasto {
+  flex: 0 0 38px;
+}
+
+.selettore .tasto[aria-pressed='true'] {
+  border-color: var(--primario);
+  background: var(--primario);
+  color: var(--primario-ink);
+}
+
+.input.numero {
+  flex: 1 1 0;
+  min-height: 46px;
+  width: 0;
+  padding: 2px;
+  text-align: center;
+  font: 600 20px var(--f-mono);
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.input.numero::-webkit-outer-spin-button,
+.input.numero::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* ---- Fascicolo: la rivelazione del ruolo e la fine della partita, con il timbro ---- */
+.fascicolo {
+  display: grid;
+  gap: 12px;
+  justify-items: center;
+  padding: 24px 16px 20px;
+  border: 1px solid var(--linea-forte);
+  border-radius: var(--raggio);
+  background: var(--pannello-2);
+  text-align: center;
+}
+
+.fascicolo p {
+  max-width: 34ch;
+  font-size: 15.5px;
+}
+
+.fascicolo .occhiello {
+  font-size: 12px;
+}
+
+.fascicolo.civile {
+  border-color: var(--verde);
+  background: var(--verde-fondo);
+}
+
+.fascicolo.assassino {
+  border-color: var(--rosso);
+  background: var(--rosso-fondo);
+}
+
+.timbro {
+  padding: 6px 14px 8px;
+  border: 4px double currentColor;
+  border-radius: 8px;
+  font-size: clamp(30px, 9.4vw, 42px);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  transform: rotate(-3deg);
+  animation: timbro 0.34s cubic-bezier(0.2, 1.3, 0.4, 1) both;
+}
+
+.civile .timbro,
+.civile .vittoria {
+  color: var(--verde);
+}
+
+.assassino .timbro,
+.assassino .vittoria {
+  color: var(--rosso);
+}
+
+.vittoria {
+  font-size: clamp(28px, 9vw, 34px);
+}
+
+@keyframes timbro {
+  from {
+    opacity: 0;
+    transform: rotate(-9deg) scale(1.7);
+  }
+}
+
+/* ---- Partita ---- */
+.partita {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.colonna-task {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.azioni {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  justify-items: center;
+}
+
+.azione {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  min-width: 0;
+  text-align: center;
+}
+
+.az-nome {
+  margin-top: 10px;
+  font: 700 15px var(--f-titolo);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.az-spiega {
+  max-width: 19ch;
+  font-size: 13px;
+  line-height: 1.3;
+  color: var(--tenue);
+}
+
+.az-stato {
+  min-height: 1.3em;
+  font: 600 12px var(--f-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--tenue);
+}
+
+.tondo {
+  --c: var(--rosso);
+  --alto: var(--rosso-alto);
+  --basso: var(--rosso-basso);
+  --bordino: var(--rosso-bordino);
+  --lato: clamp(96px, min(31vw, 19vh), 124px);
+  appearance: none;
+  -webkit-appearance: none;
+  display: grid;
+  place-items: center;
+  width: var(--lato);
+  height: var(--lato);
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, var(--alto) 0%, var(--c) 50%, var(--basso) 100%);
+  box-shadow:
+    inset 0 -5px 0 rgba(0, 0, 0, 0.22),
+    0 7px 0 var(--bordino),
+    0 14px 22px rgba(0, 0, 0, 0.32);
+  color: var(--rosso-ink);
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: transform 0.08s, box-shadow 0.08s, filter 0.2s;
+}
+
+.tondo.emergency {
+  --c: var(--ambra);
+  --alto: var(--ambra-alto);
+  --basso: var(--ambra-basso);
+  --bordino: var(--ambra-bordino);
+  color: var(--ambra-ink);
+}
+
+.tondo:active:not(:disabled) {
+  transform: translateY(6px);
+  box-shadow:
+    inset 0 -2px 0 rgba(0, 0, 0, 0.22),
+    0 1px 0 var(--bordino),
+    0 6px 12px rgba(0, 0, 0, 0.3);
+}
+
+.tondo:disabled {
+  filter: saturate(0.15) brightness(0.85);
+  cursor: not-allowed;
+}
+
+.tondo svg {
+  width: 44%;
+  height: 44%;
+}
+
+.task {
+  border: 1px solid var(--linea);
+  border-radius: var(--raggio);
+  background: var(--pannello-2);
+}
+
+.task-dentro {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 82px;
+  gap: 12px;
+  padding: 12px;
+}
+
+.task-testo {
+  margin: 3px 0 4px;
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+.spunta {
+  appearance: none;
+  -webkit-appearance: none;
+  align-self: start;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  width: 82px;
+  height: 82px;
+  padding: 0;
+  border: 2px solid var(--linea-forte);
+  border-radius: 18px;
+  background: var(--bg);
+  color: var(--testo);
+  font: 700 13px var(--f-titolo);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.spunta:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.spunta.fatta {
+  border-color: var(--verde);
+  background: var(--verde-fondo);
+  color: var(--verde);
+  cursor: default;
+}
+
+.spunta.fatta svg {
+  width: 26px;
+  height: 26px;
+}
+
+.uccidi {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--rosso-bordo);
+  border-radius: var(--raggio);
+  background: var(--rosso-fondo);
+}
+
+.uccidi-testa {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.uccidi-testa .occhiello {
+  font-size: 11px;
+  letter-spacing: 0.1em;
+}
+
+.uccidi-stato {
+  flex: none;
+  font-size: 12.5px;
+}
+
+/* ---- Riunione: nulla scorre tranne la lista, e i tasti restano sempre a vista ---- */
+.corpo.riunione {
+  overflow: hidden;
+  gap: 8px;
+  padding-top: 0;
+  padding-bottom: 8px;
+}
+
+.striscia {
+  flex: none;
+  height: 7px;
+  margin: 0 calc(var(--dx) * -1) 0 calc(var(--sx) * -1);
+  background: repeating-linear-gradient(-45deg, var(--ambra) 0 11px, var(--ambra-ink) 11px 22px);
+}
+
+[data-tipo='report'] .striscia {
+  background: repeating-linear-gradient(-45deg, var(--rosso) 0 11px, var(--rosso-ink) 11px 22px);
+}
+
+.testa-riunione,
+.testa-sala {
+  flex: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.testa-riunione {
+  padding-top: 4px;
+}
+
+.presenti {
+  flex: none;
+  display: grid;
+  justify-items: end;
+  font-size: 11.5px;
+  line-height: 1.1;
+  color: var(--tenue);
+}
+
+.presenti b {
+  font-size: 26px;
+  line-height: 1;
+  color: var(--verde);
+}
+
+.testa-riunione .tasto {
+  flex: none;
+  font-size: 11.5px;
+  padding-inline: 9px;
+  min-height: 38px;
+}
+
+.nota-riunione {
+  flex: none;
+  margin-top: -4px;
+}
+
+.fuori {
+  flex: none;
+  max-height: 2.8em;
+  overflow: hidden;
+}
+
+.piede-voto {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.conferma {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr);
+  gap: 8px;
+}
+
+.conferma.pari {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.conferma .tasto {
+  padding-inline: 8px;
+  min-height: 52px;
+}
+
+/* ---- Esito ---- */
+.risultato {
+  display: grid;
+  gap: 6px;
+  justify-items: center;
+  padding: 16px 14px;
+  border: 1px solid var(--linea-forte);
+  border-radius: var(--raggio);
+  background: var(--pannello-2);
+  text-align: center;
+  animation: entra 0.3s ease both;
+}
+
+.corpo.esito {
+  padding-top: 0;
+}
+
+.era {
+  font: 700 18px var(--f-titolo);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.era.civile,
+.esito-civili {
+  color: var(--verde);
+}
+
+.era.assassino,
+.esito-assassini {
+  color: var(--rosso);
+}
+
+.esito-civili,
+.esito-assassini {
+  font-size: 14px;
+}
+
+/* ---- Dialoghi ---- */
+.velo {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: var(--velo);
+}
+
+.dialogo {
+  display: grid;
+  gap: 12px;
+  width: 100%;
+  max-width: 340px;
+  padding: 20px 18px;
+  border: 1px solid var(--linea-forte);
+  border-radius: var(--raggio);
+  background: var(--pannello);
+  box-shadow: var(--ombra);
+  animation: comparsa 0.2s ease both;
+}
+
+.dialogo p {
+  font-size: 15px;
+  color: var(--tenue);
+}
+
+@keyframes comparsa {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+}
+
+/* ---- Schermi bassi: si rinuncia prima ai suggerimenti, mai ai tasti ---- */
+@media (max-height: 600px) {
+  .task-dentro .nota {
+    display: none;
+  }
+}
+
+/* ---- Telefono in orizzontale: Report ed Emergency accanto alla task ---- */
+@media (max-height: 480px) and (orientation: landscape) {
+  .barra-alta {
+    padding-block: calc(2px + var(--su)) 2px;
+  }
+
+  .barra-verde {
+    padding-block: 3px;
+  }
+
+  .corpo {
+    gap: 8px;
+    padding-block: 8px;
+  }
+
+  .piede {
+    padding-top: 6px;
+    padding-bottom: max(6px, env(safe-area-inset-bottom, 0px));
+  }
+
+  .partita {
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+    gap: 16px;
+  }
+
+  .azioni {
+    grid-template-columns: auto auto;
+    gap: 12px;
+  }
+
+  .az-spiega,
+  .spiega-morto,
+  .uccidi-spiega {
+    display: none;
+  }
+
+  .az-nome {
+    margin-top: 8px;
+    font-size: 13px;
+  }
+
+  .tondo {
+    --lato: 96px;
+  }
+
+  .tasto.grande {
+    min-height: 46px;
+  }
+
+  .griglia {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .uccidi {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: center;
+  }
+
+  .uccidi-testa {
+    display: grid;
+    gap: 2px;
+  }
+
+  .corpo.riunione .nota:not(.fuori) {
+    display: none;
+  }
+
+  .conferma .tasto {
+    min-height: 46px;
+  }
+
+  .fascicolo {
+    padding: 12px;
+    gap: 8px;
+  }
+}
+
+@media (max-height: 480px) and (orientation: landscape) and (min-width: 760px) {
+  .griglia {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+/* ---- Avvisi e banner ---- */
+.avvisi {
+  position: fixed;
+  left: 50%;
+  bottom: calc(92px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  z-index: 40;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  pointer-events: none;
+}
+
+.avviso {
+  padding: 9px 14px;
+  border-radius: 10px;
+  background: var(--testo);
+  box-shadow: var(--ombra);
+  color: var(--bg);
+  font-size: 14px;
+  font-weight: 500;
+  text-align: center;
+  animation: entra 0.2s ease both;
+}
+
+.banner-rete {
+  position: absolute;
+  top: calc(52px + var(--su));
+  left: var(--sx);
+  right: var(--dx);
+  z-index: 30;
+  padding: 10px 14px;
+  border: 1px solid var(--ambra);
+  border-radius: 12px;
+  background: var(--ambra-fondo);
+  box-shadow: var(--ombra);
+  color: var(--testo);
+  font: 500 14.5px var(--f-corpo);
+  text-align: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
