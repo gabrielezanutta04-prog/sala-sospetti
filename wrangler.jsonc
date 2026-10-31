@@ -1,0 +1,7 @@
+{
+  "name": "sala-sospetti",
+  "main": "server/stanza.ts",
+  "compatibility_date": "2026-09-01",
+  "durable_objects": { "bindings": [{ "name": "STANZA", "class_name": "Stanza" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Stanza"] }]
+}

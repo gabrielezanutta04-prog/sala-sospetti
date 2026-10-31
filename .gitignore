@@ -1,0 +1,8 @@
+node_modules/
+.next/
+out/
+.wrangler/
+.dev.vars
+next-env.d.ts
+*.tsbuildinfo
+test/risultati/
