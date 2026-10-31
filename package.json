@@ -7,7 +7,7 @@
     "build": "next build",
     "server": "wrangler dev",
     "test": "node test/serata.ts",
-    "test:rete": "node test/serata.ts --rete",
+    "test:rete": "node test/rete.ts",
     "test:telefoni": "node test/telefoni.ts"
   },
   "dependencies": {
