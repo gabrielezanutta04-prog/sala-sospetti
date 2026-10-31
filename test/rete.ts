@@ -48,16 +48,33 @@ async function avviaServer(variabili: string[]) {
   assert.ok(!(await risponde()), `la porta ${PORTA} è già occupata`)
   const argomenti = ['dev', '--port', String(PORTA), '--ip', '127.0.0.1', '--persist-to', '.wrangler/prova', '--show-interactive-dev-session=false']
   for (const v of variabili) argomenti.push('--var', v)
-  server = spawn(process.execPath, [WRANGLER, ...argomenti], {
-    cwd: RADICE,
-    stdio: ['ignore', 'pipe', 'pipe'],
-    windowsHide: true,
-    detached: process.platform !== 'win32',
-    env: { ...process.env, WRANGLER_SEND_METRICS: 'false' },
-  })
-  server.stdout?.on('data', d => (registro += d))
-  server.stderr?.on('data', d => (registro += d))
-  await attendiCondizione(risponde, 'wrangler dev non risponde', 60 * 1000)
+
+  // wrangler sceglie da solo le sue porte interne: se un altro avvio sulla macchina gliele porta via, si riprova.
+  for (let tentativo = 1; ; tentativo++) {
+    const inizio = registro.length
+    const processo = spawn(process.execPath, [WRANGLER, ...argomenti], {
+      cwd: RADICE,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
+      detached: process.platform !== 'win32',
+      env: { ...process.env, WRANGLER_SEND_METRICS: 'false' },
+    })
+    server = processo
+    processo.stdout.on('data', d => (registro += d))
+    processo.stderr.on('data', d => (registro += d))
+    try {
+      const pronto = async () => {
+        assert.equal(processo.exitCode, null, 'wrangler si è fermato')
+        assert.ok(!registro.includes('Address already in use', inizio), 'porta interna di wrangler occupata')
+        return risponde()
+      }
+      await attendiCondizione(pronto, 'wrangler dev non risponde', 30 * 1000)
+      return
+    } catch (errore) {
+      uccidiServer()
+      if (tentativo === 3) throw errore
+    }
+  }
 }
 
 // Uccisione vera, senza chiusura ordinata: solo il processo avviato qui e i suoi figli.
@@ -134,7 +151,7 @@ function controllaSegreti(t: Telefono, testo: string, v: V) {
 
 class Telefono {
   nome: string
-  token = crypto.randomUUID()
+  token: string = crypto.randomUUID()
   ws: WebSocket | null = null
   storia: V[] = []
   cursore = 0 // viste già consumate da attendi: così non si perde una fase breve
@@ -447,7 +464,7 @@ async function serata(): Promise<string> {
   c7.togli(fuggitivo)
   fuggitivo.invia('esci')
   assert.equal(await fuggitivo.attendiChiusura(), 4001, 'chiusura dopo Esci')
-  await aspettaTutti(elettori, v => v.rivota === true && v.mioVoto === null && v.votati === 0, 'voto da rifare')
+  await aspettaTutti(elettori, v => v.rivota === true && v.mioVoto === null && v.votati === 3, 'voto da rifare')
   const rimasti = telefoni.filter(t => t !== fuggitivo)
   for (const t of rimasti) t.invia('vota', 'salta')
   await aspettaTutti(rimasti, esito, 'esito')
@@ -485,7 +502,7 @@ async function serata(): Promise<string> {
   for (const t of contro) t.invia('vota', id(tardivo))
   await aspettaTutti(telefoni, v => v.votati === 5, 'cinque voti')
   tardivo.invia('sonoMorto')
-  const annullati = await aspettaTutti(contro, v => v.rivota === true && v.votati === 0, 'voti annullati')
+  const annullati = await aspettaTutti(contro, v => v.rivota === true && v.votati === 4, 'voti annullati')
   for (const v of annullati) {
     assert.equal(v.totale, 14, 'votanti dopo Sono morto')
     assert.deepEqual(v.fuori, [tardivo.nome], 'lista dei morti')
@@ -902,8 +919,11 @@ const limite = setTimeout(() => {
 }, 10 * 60 * 1000)
 limite.unref()
 
-console.log('Avvio di wrangler dev sulla porta 8788...')
-await avviaServer(['SCALA_TEMPI:30'])
+console.log(`Avvio di wrangler dev sulla porta ${PORTA}...`)
+await avviaServer(['SCALA_TEMPI:30']).catch(errore => {
+  console.error(registro.slice(-2000))
+  throw errore
+})
 
 await Promise.all([
   prova('Serata completa con 15 telefoni e C7', serata),

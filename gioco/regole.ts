@@ -132,7 +132,8 @@ export type Stato = {
   f: number // contatore di fase: scarta le azioni rimaste indietro
   hostId: number | null
   numeroTask: number
-  numeroAssassini: number
+  numeroAssassini: number // scelta dell'host: resta salvata di partita in partita
+  assassiniPartita: number // assassini distribuiti allo Start, 0 finché non c'è una partita
   giocatori: Giocatore[] // in ordine di ingresso
   barra: number
   traguardo: number // 0 finché non c'è una partita
@@ -255,7 +256,7 @@ export type Vista = VistaSala | VistaRuolo | VistaPartita | VistaRiunione | Vist
 const trova = (s: Stato, id: number | null) => s.giocatori.find(g => g.id === id)
 const online = (g: Giocatore, ora: number) => ora - g.visto < OFFLINE_MS
 const contaAssassini = (giocatori: Giocatore[]) => giocatori.filter(g => g.ruolo === 'assassino').length
-const calcolaTraguardo = (civili: number, numeroTask: number) => Math.ceil((civili * numeroTask) / 2)
+const calcolaTraguardo = (civili: number, numeroTask: number) => Math.max(1, Math.ceil((civili * numeroTask) / 2))
 
 // Generatore mulberry32: tutto il suo stato è il seme, quindi resta riproducibile dopo ogni salvataggio.
 function casuale(s: Stato): number {
@@ -441,14 +442,14 @@ function rimuovi(s: Stato, g: Giocatore, ora: number) {
 
 // ---- Inizio e fine partita ----
 function avvia(s: Stato, ora: number) {
-  s.numeroAssassini = assassiniEffettivi(s)
+  s.assassiniPartita = assassiniEffettivi(s)
   mescola(s, [...s.giocatori]).forEach((g, i) => {
-    const assassino = i < s.numeroAssassini
+    const assassino = i < s.assassiniPartita
     g.ruolo = assassino ? 'assassino' : 'civile'
     g.uccidiDa = assassino ? ora + s.durate.uccidi : null
     g.task = pesca(s, null)
   })
-  s.traguardo = calcolaTraguardo(s.giocatori.length - s.numeroAssassini, s.numeroTask)
+  s.traguardo = calcolaTraguardo(s.giocatori.length - s.assassiniPartita, s.numeroTask)
   s.fase = 'partita'
   s.f++
 }
@@ -459,6 +460,7 @@ function tornaInSala(s: Stato) {
   s.f++
   s.barra = 0
   s.traguardo = 0
+  s.assassiniPartita = 0
   s.emergencyDa = 0
   s.emergencyDaId = null
   s.emergencyDaNome = null
@@ -479,6 +481,7 @@ export function nuovaStanza(codice: string, seme: number, scala = 1): Stato {
     hostId: null,
     numeroTask: TASKS_DEFAULT,
     numeroAssassini: 1,
+    assassiniPartita: 0,
     giocatori: [],
     barra: 0,
     traguardo: 0,
@@ -707,7 +710,7 @@ export function vista(s: Stato, id: number, ora: number): Vista {
       ...comune,
       schermata,
       ruolo: g.ruolo as Ruolo,
-      assassini: s.numeroAssassini,
+      assassini: s.assassiniPartita,
       complici: assassino ? s.giocatori.filter(x => x.ruolo === 'assassino' && x !== g).map(x => x.nome) : [],
     }
   }
@@ -760,14 +763,16 @@ export function vista(s: Stato, id: number, ora: number): Vista {
     }
   }
 
+  // Chi deve rivotare resta contato: se tornasse a zero, tutti vedrebbero chi aveva votato il giocatore uscito.
+  const contato = (x: Giocatore) => x.id in r.voti || r.rivotare.includes(x.id)
   const vivi = s.giocatori.filter(x => x.vivo)
   return {
     ...comune,
     ...convocata,
     schermata,
-    giocatori: vivi.map(x => ({ ...riga(x), haVotato: x.id in r.voti })),
+    giocatori: vivi.map(x => ({ ...riga(x), haVotato: contato(x) })),
     fuori: s.giocatori.filter(x => !x.vivo).map(x => x.nome),
-    votati: vivi.filter(x => x.id in r.voti).length,
+    votati: vivi.filter(contato).length,
     totale: vivi.length,
     mioVoto: r.voti[g.id] ?? null,
     rivota: r.rivotare.includes(g.id),

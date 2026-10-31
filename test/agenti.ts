@@ -289,6 +289,7 @@ function falsifica(v: Vista, m: Memoria): unknown {
   if (m.r.ruolo !== 'assassino') scelte.push({ a: 'uccidi', f })
   if (!v.io.host) scelte.push({ a: 'start', f }, { a: 'impostaTask', x: 99, f })
   if (v.schermata === 'partita' && m.adesso < v.taskDa) scelte.push({ a: 'spunta', f })
+  if (v.schermata === 'partita' && m.adesso < v.emergencyDa) scelte.push({ a: 'emergency', f })
   if (v.schermata === 'riunione' && v.mioVoto !== null) scelte.push({ a: 'vota', x: 'salta', f })
   return scegli(m, scelte)
 }

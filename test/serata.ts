@@ -216,6 +216,7 @@ function azioneAccettata(b: Banco, id: number, az: Azione) {
       if (b.ora < (a.taskPronta.get(id) ?? 0)) errore('C5', `spunta in anticipo di ${id}`)
       a.taskPronta.set(id, b.ora + ATTESO.task)
       a.spunte++
+      vero(b.s.giocatori.some(g => g.id === id && g.task !== g.taskFatta), 'C5: nuova task uguale alla precedente')
       break
     case 'uccidi':
       if (!a) errore('C5', 'Uccidi senza partita')
@@ -390,7 +391,10 @@ function sorveglia(b: Banco) {
   if (s.giocatori.length !== b.iscritti.size || s.giocatori.some(g => !b.iscritti.has(g.id))) errore('C8', 'lista giocatori diversa da quella attesa')
   if (s.hostId !== null && !b.iscritti.has(s.hostId)) errore('C8', 'host non presente nella stanza')
   if (s.hostId !== b.host) {
-    if (b.host !== null && b.iscritti.has(b.host)) b.conta.passaggiHost++
+    if (b.host !== null && b.iscritti.has(b.host)) {
+      b.conta.passaggiHost++
+      if (b.ora - (b.segnali.get(s.hostId as number) ?? 0) >= ATTESO.offline) errore('C8', `host passato a un giocatore offline: ${s.hostId}`)
+    }
     b.host = s.hostId
   }
 
@@ -408,6 +412,7 @@ function sorveglia(b: Banco) {
   if (vivi.length !== a.vivi.size || vivi.some(g => !a.vivi.has(g.id))) errore('C4', 'vivi diversi dal registro')
   if (s.emergencyDa !== a.emergencyPronta) errore('C5', `Emergency pronta a ${s.emergencyDa}, attesa ${a.emergencyPronta}`)
   for (const g of s.giocatori) {
+    if (g.visto !== b.segnali.get(g.id)) errore('C8', `ultimo segnale di ${g.id} a ${g.visto}, atteso ${b.segnali.get(g.id)}`)
     if (g.taskDa !== (a.taskPronta.get(g.id) ?? 0)) errore('C5', `task di ${g.id} pronta a ${g.taskDa}, attesa ${a.taskPronta.get(g.id)}`)
     if (a.assassini.has(g.id) && g.uccidiDa !== a.uccidiPronto.get(g.id)) errore('C5', `Uccidi di ${g.id} pronto a ${g.uccidiDa}, atteso ${a.uccidiPronto.get(g.id)}`)
   }
@@ -454,6 +459,7 @@ function nuovoArbitro(b: Banco): Arbitro {
   const n = s.giocatori.length
   if (assassini.size < 1 || assassini.size > Math.max(1, Math.floor((n - 1) / 2))) errore('C4', `${assassini.size} assassini con ${n} giocatori`)
   if (s.giocatori.some(g => g.ruolo === null)) errore('C4', 'giocatore senza ruolo allo Start')
+  if (s.assassiniPartita !== assassini.size) errore('C4', `${s.assassiniPartita} assassini dichiarati, ${assassini.size} con il ruolo`)
   const uccidiPronto = new Map([...assassini].map(id => [id, ora + ATTESO.uccidi]))
   return {
     inizio: ora,
@@ -492,6 +498,8 @@ function chiusuraRiunione(b: Banco, arb: Arbitro) {
     if (riga.voti !== voti) errore('C4', `${riga.nome} ha ${riga.voti} voti, per l'arbitro ${voti}`)
   }
   if (r.votanti.length !== vivi.length) errore('C4', 'votanti diversi dai vivi')
+  const morti = s.giocatori.filter(g => !arb.vivi.has(g.id)).map(g => g.nome)
+  if (r.fuori.join() !== morti.join()) errore('C4', `fuori: ${r.fuori}, per l'arbitro: ${morti}`)
   if (s.scadenza !== ora + ATTESO.esito) errore('C5', `esito con scadenza ${s.scadenza}, attesa ${ora + ATTESO.esito}`)
 
   if (eliminato !== null) {
@@ -525,7 +533,7 @@ function arrivoAllaFine(b: Banco, arb: Arbitro) {
 function ritornoInSala(b: Banco) {
   const { s, ora } = b
   if (ora - b.faseDa !== ATTESO.fine) errore('C5', `fine durata ${ora - b.faseDa} ms`)
-  if (s.barra !== 0 || s.traguardo !== 0 || s.riunione || s.scadenza !== null || s.vincitore || s.motivo) errore('C9', 'stanza non azzerata')
+  if (s.barra !== 0 || s.traguardo !== 0 || s.assassiniPartita !== 0 || s.riunione || s.scadenza !== null || s.vincitore || s.motivo) errore('C9', 'stanza non azzerata')
   for (const g of s.giocatori) {
     if (g.ruolo !== null || !g.vivo || g.causa !== null || g.ruoloVisto || g.task !== null || g.taskFatta !== null || g.uccidiDa !== null) {
       errore('C9', `giocatore non azzerato: ${g.nome}`)
@@ -605,7 +613,7 @@ const PARTITE_SERATA: { numeroTask: number; assassini: number }[] = [
   { numeroTask: 8, assassini: 1 },
   { numeroTask: 24, assassini: 2 },
   { numeroTask: 16, assassini: 2 },
-  { numeroTask: 12, assassini: 2 },
+  { numeroTask: 13, assassini: 2 }, // dispari, con 13 civili: l'arrotondamento per eccesso si vede solo così
 ]
 
 function giocaSerata(seme: number): Banco {
@@ -664,6 +672,7 @@ const inEsito = (b: Banco, t: TelefonoFinto) => vedi(b, t) as VistaEsito
 const inPartita = (b: Banco, t: TelefonoFinto) => vedi(b, t) as VistaPartita
 const inSala = (b: Banco, t: TelefonoFinto) => vedi(b, t) as VistaSala
 const giocatore = (b: Banco, t: TelefonoFinto) => b.s.giocatori.find(g => g.id === t.id) as Giocatore
+const coloreDi = (b: Banco, t: TelefonoFinto) => vedi(b, t).io.colore
 
 function iscrivi(b: Banco, quanti: number): TelefonoFinto[] {
   return PERSONALITA.slice(0, quanti).map(p => {
@@ -708,9 +717,18 @@ function s2() {
 
   avanza(b, zero + ATTESO.offline)
   vero(riga()?.offline === true, 'non offline dopo 30 s')
+  vero(!nega(b, tel[1], { a: 'togli', x: tommaso.id }), 'Togli da chi non è host')
   devePremere(b, marta, { a: 'togli', x: tommaso.id })
   vero(b.s.fase === 'esito', 'dopo Togli la riunione doveva chiudersi')
   vero(!b.s.giocatori.some(g => g.id === tommaso.id), 'Tommaso è ancora in lista')
+
+  // In partita Togli non esiste: solo in sala e in riunione.
+  const p = nuovoBanco(2003)
+  const sei = iscrivi(p, 6)
+  parti(p, sei)
+  sei[5].scollega()
+  aspetta(p, ATTESO.offline + PRESENZE_MS)
+  vero(!nega(p, sei[0], { a: 'togli', x: sei[5].id }), 'Togli in partita')
 
   // In sala, prima dello Start: chi è sparito non riceve un ruolo.
   b = nuovoBanco(2002)
@@ -734,7 +752,7 @@ function s3() {
 
   marta.scollega()
   ugo.scollega()
-  aspetta(b, ATTESO.offline + PRESENZE_MS)
+  aspetta(b, ATTESO.offline)
   vero(b.s.hostId === beppe.id, 'il ruolo deve passare al primo connesso, saltando chi è offline')
   vero(inSala(b, beppe).io.host, 'il nuovo host non si vede tale')
 
@@ -757,7 +775,9 @@ function s4() {
   const tel = iscrivi(b, 5)
   const { ass, civ } = parti(b, tel)
   const [rita, a, c, d, e] = [civ[0], civ[1], civ[2], civ[3], ass[0]]
-  devePremere(b, a, { a: 'emergency' })
+  const nomeRita = giocatore(b, rita).nome
+  const colori = [a, c, d, e].map(t => coloreDi(b, t))
+  devePremere(b, rita, { a: 'emergency' })
   for (const t of [a, c, d]) devePremere(b, t, { a: 'vota', x: rita.id })
   devePremere(b, rita, { a: 'vota', x: a.id })
   vero(inRiunione(b, a).votati === 4, 'voti prima dell\'uscita')
@@ -768,21 +788,32 @@ function s4() {
     const v = inRiunione(b, t)
     vero(v.rivota && v.mioVoto === null, 'chi aveva votato Rita deve rivotare')
   }
-  vero(inRiunione(b, a).votati === 0, 'il voto di Rita doveva sparire')
+  // Sparisce solo il voto di Rita: chi deve rivotare resta contato, altrimenti tutti vedrebbero chi aveva votato lei.
+  vero(inRiunione(b, a).votati === 3 && inRiunione(b, a).totale === 4, 'il voto di Rita doveva sparire, gli annullati restare contati')
+  vero(inRiunione(b, e).giocatori.every(g => g.haVotato === (g.id !== e.id)), 'chi deve rivotare si distingue dagli altri')
+  vero(inRiunione(b, a).daNome === nomeRita, 'Convocata da: il nome di chi è uscito va tenuto')
+  vero([a, c, d, e].every((t, i) => coloreDi(b, t) === colori[i]), 'il colore è cambiato quando qualcuno è uscito')
 
   devePremere(b, e, { a: 'vota', x: 'salta' })
   vero(tel.length - 1 === b.s.giocatori.length, 'Rita è ancora in lista')
   devePremere(b, a, { a: 'vota', x: 'salta' })
+  vero(!inRiunione(b, a).rivota, 'chi ha rivotato non deve rivotare ancora')
   devePremere(b, c, { a: 'vota', x: 'salta' })
   vero(b.s.fase === 'riunione', 'chiusa con un voto mancante')
   devePremere(b, d, { a: 'vota', x: 'salta' })
   vero(b.s.fase === 'esito' && inEsito(b, a).salti === 4, 'conteggio dopo l\'uscita')
 
-  // Se esce l'host, il ruolo passa al successivo.
+  // Se esce l'host il ruolo passa al successivo, non al primo della lista.
   const r = nuovoBanco(4002)
   const altri = iscrivi(r, 4)
-  devePremere(r, altri[0], { a: 'esci' })
-  vero(r.s.hostId === altri[1].id, 'host non passato al successivo')
+  altri[0].scollega()
+  altri[1].scollega()
+  aspetta(r, ATTESO.offline)
+  vero(r.s.hostId === altri[2].id, 'host atteso prima dell\'uscita')
+  altri[0].collega('Marta')
+  altri[1].collega('Ugo')
+  devePremere(r, altri[2], { a: 'esci' })
+  vero(r.s.hostId === altri[3].id, 'host non passato al successivo')
 }
 
 function s5() {
@@ -800,7 +831,7 @@ function s5() {
 
   vero(b.s.fase === 'riunione', 'la vittoria deve aspettare la fine della riunione')
   const v = inRiunione(b, c1)
-  vero(v.totale === 2 && v.votati === 0, 'conteggi dopo Sono morto')
+  vero(v.totale === 2 && v.votati === 2, 'conteggi dopo Sono morto')
   vero(v.rivota && v.fuori.includes(giocatore(b, piero).nome), 'Piero tra i morti e voti da rifare')
   vero(giocatore(b, piero).causa === 'morto', 'causa di Piero')
 
@@ -1020,6 +1051,10 @@ function s9() {
   vero(!nega(b, ass[0], { a: 'uccidi' }), 'Uccidi prima dei 5 minuti')
   devePremere(b, truffatore, { a: 'spunta' })
   vero(!nega(b, truffatore, { a: 'spunta' }), 'spunta in anticipo')
+  aspetta(b, ATTESO.task - 1)
+  vero(!nega(b, truffatore, { a: 'spunta' }), 'spunta 1 ms prima della scadenza')
+  aspetta(b, 1)
+  devePremere(b, truffatore, { a: 'spunta' })
   vero(!manda(b, truffatore, { a: 'report', f: b.s.f - 1 }, true), 'f vecchio accettato')
   vero(!manda(b, truffatore, { a: 'report', f: String(b.s.f) }, true), 'f come testo accettato')
 
@@ -1033,9 +1068,26 @@ function s9() {
   vero(!nega(b, terzo, { a: 'vota', x: 'salta' }), 'voto da morto')
   devePremere(b, truffatore, { a: 'vota', x: 'salta' })
   vero(!nega(b, truffatore, { a: 'vota', x: altro.id }), 'secondo voto')
-  vero(!nega(b, truffatore, { a: 'spunta' }), 'spunta in riunione')
+  vero(!nega(b, ass[0], { a: 'spunta' }), 'spunta in riunione con la task pronta')
 
-  // Da morti restano solo le task.
+  // Emergency: 10 minuti per tutti dall'ultima pressione. Il Report non ha attese.
+  const e = nuovoBanco(9003)
+  const stanza = iscrivi(e, 6)
+  parti(e, stanza)
+  devePremere(e, stanza[0], { a: 'emergency' })
+  const pronta = e.ora + ATTESO.emergency
+  for (const t of stanza) devePremere(e, t, { a: 'vota', x: 'salta' })
+  aspetta(e, ATTESO.esito)
+  vero(!nega(e, stanza[1], { a: 'emergency' }), 'Emergency in attesa, premuta da un altro')
+  devePremere(e, stanza[1], { a: 'report' })
+  for (const t of stanza) devePremere(e, t, { a: 'vota', x: 'salta' })
+  aspetta(e, ATTESO.esito)
+  avanza(e, pronta - 1)
+  vero(!nega(e, stanza[2], { a: 'emergency' }), 'Emergency 1 ms prima della scadenza')
+  avanza(e, pronta)
+  devePremere(e, stanza[2], { a: 'emergency' })
+
+  // Da morti restano le task ed Esci.
   const c = nuovoBanco(9002)
   const tavolo = iscrivi(c, 6)
   const ruoli = parti(c, tavolo, { task: 40, assassini: 2 })
@@ -1047,6 +1099,7 @@ function s9() {
   vero(!nega(c, ruoli.civ[0], { a: 'emergency' }), 'Emergency da morto')
   vero(!nega(c, ruoli.civ[0], { a: 'sonoMorto' }), 'Sono morto due volte')
   devePremere(c, ruoli.civ[0], { a: 'spunta' })
+  devePremere(c, ruoli.civ[0], { a: 'esci' })
 }
 
 function s10() {
@@ -1062,6 +1115,34 @@ function s10() {
   devePremere(cinque, c[4], { a: 'esci' })
   vero(inSala(cinque, c[0]).numeroAssassini === 1, 'con 4 giocatori ne resta 1')
 
+  // La scelta dell'host resta salvata anche se si gioca con meno giocatori: al ritorno in sala torna valida.
+  const scelta = nuovoBanco(10004)
+  const sc = iscrivi(scelta, 5)
+  const quattroRimasti = sc.slice(0, 4)
+  devePremere(scelta, sc[0], { a: 'impostaAssassini', x: 2 })
+  devePremere(scelta, sc[4], { a: 'esci' })
+  devePremere(scelta, sc[0], { a: 'impostaTask', x: 1 })
+  devePremere(scelta, sc[0], { a: 'start' })
+  vero(quattroRimasti.every(t => (vedi(scelta, t) as VistaRuolo).assassini === 1), 'Rivelazione a 4 giocatori: 1 assassino')
+  vero(scelta.s.traguardo === 2, `traguardo ${scelta.s.traguardo}: 3 civili per 1 task fanno 2`)
+  for (const t of quattroRimasti) devePremere(scelta, t, { a: 'ruoloVisto' })
+  for (const t of quattroRimasti.slice(0, 2)) devePremere(scelta, t, { a: 'spunta' })
+  aspetta(scelta, ATTESO.fine)
+  vero(scelta.s.fase === 'sala', 'si doveva tornare in sala')
+  vero(inSala(scelta, sc[0]).numeroAssassini === 1, 'al ritorno, con 4 giocatori, il selettore resta a 1')
+  sc[4].collega('Quinto')
+  vero(inSala(scelta, sc[0]).numeroAssassini === 2, 'dopo una partita a 4 la scelta di 2 assassini si è persa')
+
+  // Su Rivelazione si legge il numero della partita: se scendesse quando un assassino esce, lo si scoprirebbe.
+  const riv = nuovoBanco(10005)
+  const sette = iscrivi(riv, 7)
+  devePremere(riv, sette[0], { a: 'impostaAssassini', x: 2 })
+  devePremere(riv, sette[0], { a: 'start' })
+  const inFuga = sette.find(t => giocatore(riv, t).ruolo === 'assassino') as TelefonoFinto
+  const fermo = sette.find(t => giocatore(riv, t).ruolo === 'civile') as TelefonoFinto
+  devePremere(riv, inFuga, { a: 'esci' })
+  vero((vedi(riv, fermo) as VistaRuolo).assassini === 2, "il numero su Rivelazione è sceso con l'uscita di un assassino")
+
   const b = nuovoBanco(10003)
   const tel = iscrivi(b, 7)
   const { ass, civ } = parti(b, tel, { assassini: 2 })
@@ -1071,7 +1152,9 @@ function s10() {
   vero(inPartita(b, a1).uccidiDa === inizio + ATTESO.uccidi, 'timer iniziale')
   vero(inPartita(b, civ[0]).uccidiDa === undefined, 'timer Uccidi a un civile')
 
-  aspetta(b, ATTESO.uccidi)
+  aspetta(b, ATTESO.uccidi - 1)
+  vero(!nega(b, a1, { a: 'uccidi' }), 'Uccidi 1 ms prima della scadenza')
+  aspetta(b, 1)
   const prima = tel.map(t => t.ultimoTesto)
   devePremere(b, a1, { a: 'uccidi' })
   vero(tel.every((t, i) => t === a1 || t.ultimoTesto === prima[i]), 'Uccidi ha spedito qualcosa agli altri telefoni')
@@ -1094,6 +1177,16 @@ function s11() {
   // La scala divide le durate di gioco, le soglie di presenza non si toccano.
   const veloce = nuovaStanza('ABCDE', 1, 30)
   vero(veloce.durate.esito === 267 && veloce.durate.task === 4000 && veloce.durate.uccidi === 10000, 'scala delle durate')
+
+  // Traguardo arrotondato per eccesso: 3 civili per 3 task fanno 4,5.
+  const dispari = nuovoBanco(11000)
+  parti(dispari, iscrivi(dispari, 4), { task: 3 })
+  vero(dispari.s.traguardo === 5, `traguardo ${dispari.s.traguardo}, atteso 5`)
+
+  // L'anteprima in sala non scende sotto 1, come nel prototipo: con l'host da solo i civili sono 0.
+  const solo = nuovoBanco(11008)
+  const [unico] = iscrivi(solo, 1)
+  vero(inSala(solo, unico).traguardoPrevisto === 1, `anteprima con un giocatore: ${inSala(solo, unico).traguardoPrevisto}`)
 
   // Barra piena: 2 civili, 1 task, traguardo 1.
   let b = nuovoBanco(11001)
@@ -1248,6 +1341,31 @@ function s14() {
   vero(b.s.fase === 'esito' && inEsito(b, ass[0]).salti === 5, 'chi deve rivotare e manca vale Salta')
 }
 
+// Due stanze uguali tranne il bersaglio di un voto: dopo l'annullamento chi guarda non deve capire in quale si trova.
+function votiAnnullati() {
+  const dopo = (uscita: 'sonoMorto' | 'esci' | 'togli', votaChiEsce: boolean) => {
+    const b = nuovoBanco(15001)
+    const tel = iscrivi(b, 6)
+    parti(b, tel)
+    const [host, votante, altro, terzo, , chiEsce] = tel
+    devePremere(b, host, { a: 'report' })
+    devePremere(b, votante, { a: 'vota', x: (votaChiEsce ? chiEsce : altro).id })
+    if (uscita === 'togli') {
+      chiEsce.scollega()
+      aspetta(b, ATTESO.offline + PRESENZE_MS)
+      devePremere(b, host, { a: 'togli', x: chiEsce.id })
+    } else {
+      devePremere(b, chiEsce, { a: uscita })
+    }
+    vero(b.s.fase === 'riunione', `${uscita}: la riunione doveva restare aperta`)
+    vero(inRiunione(b, votante).rivota === votaChiEsce, `${uscita}: rivota solo chi aveva votato chi è uscito`)
+    return parteComune(vedi(b, terzo))
+  }
+  for (const uscita of ['sonoMorto', 'esci', 'togli'] as const) {
+    vero(dopo(uscita, true) === dopo(uscita, false), `${uscita}: un voto annullato si riconosce dagli altri telefoni`)
+  }
+}
+
 function riproducibile() {
   const impronta = (b: Banco) => JSON.stringify([b.s, b.ora, b.conta, b.mondo.conta])
   vero(impronta(giocaSerata(4242)) === impronta(giocaSerata(4242)), 'lo stesso seme ha dato due serate diverse')
@@ -1256,6 +1374,21 @@ function riproducibile() {
 
 function coperturaTask() {
   vero(new Set(TASKS).size === TASKS.length && TASKS.length >= 30, 'servono almeno 30 testi diversi')
+
+  // Molti giri di mazzo: dopo ogni spunta il testo deve cambiare.
+  const s = nuovaStanza('ABCDE', 77)
+  const giocatori = ['a', 'b', 'c', 'd'].map(n => entra(s, n, n, 0)).map(e => (e as { id: number }).id)
+  applica(s, giocatori[0], { a: 'impostaTask', x: 1_000_000, f: s.f }, 0)
+  applica(s, giocatori[0], { a: 'start', f: s.f }, 0)
+  for (const id of giocatori) applica(s, id, { a: 'ruoloVisto', f: s.f }, 0)
+  let ora = 0
+  for (let turno = 0; turno < 3000; turno++) {
+    ora += ATTESO.task
+    for (const g of s.giocatori) {
+      vero(applica(s, g.id, { a: 'spunta', f: s.f }, ora), 'spunta rifiutata')
+      vero(g.task !== g.taskFatta, `task ripetuta al turno ${turno}`)
+    }
+  }
 }
 
 const SCENARI: [string, () => void][] = [
@@ -1271,6 +1404,7 @@ const SCENARI: [string, () => void][] = [
   ['S10 due assassini', s10],
   ['S11 tutti i finali', s11],
   ['S14 voto chiuso dagli assenti, senza host', s14],
+  ['    voti annullati senza indizi per gli altri', votiAnnullati],
   ['    testi delle task', coperturaTask],
 ]
 
@@ -1458,15 +1592,25 @@ function main() {
 
   if (pos('--seme') >= 0) {
     const seme = Number(argomenti[pos('--seme') + 1])
-    const b = giocaSerata(seme)
-    console.log(`Serata ${seme} finita senza errori: ${b.conta.partite} partite, ${b.conta.riunioni} riunioni.`)
+    try {
+      const b = giocaSerata(seme)
+      console.log(`Serata ${seme} finita senza errori: ${b.conta.partite} partite, ${b.conta.riunioni} riunioni.`)
+    } catch (e) {
+      console.log(`ERRORE serata seme ${seme}: ${(e as Error).message}`)
+      process.exitCode = 1
+    }
     return
   }
 
   if (pos('--partita') >= 0) {
     const [giocatori, assassini, numeroTask, seme] = argomenti[pos('--partita') + 1].split(',').map(Number)
-    const b = giocaPartita({ giocatori, assassini, numeroTask }, seme)
-    console.log(`Partita finita senza errori: vincono i ${b.s.vincitore} (${b.s.motivo}) in ${decimale(b.durata / MIN)} min.`)
+    try {
+      const b = giocaPartita({ giocatori, assassini, numeroTask }, seme)
+      console.log(`Partita finita senza errori: vincono i ${b.s.vincitore} (${b.s.motivo}) in ${decimale(b.durata / MIN)} min.`)
+    } catch (e) {
+      console.log(`ERRORE partita seme ${seme}: ${(e as Error).message}`)
+      process.exitCode = 1
+    }
     return
   }
 

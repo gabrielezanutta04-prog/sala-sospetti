@@ -16,8 +16,8 @@ import {
   useSchermoAcceso,
   useStanza,
 } from './connessione.ts'
-import type { Comando, Errore, Ingresso } from './connessione.ts'
-import { Collegamento, Gioco, Home } from './schermate.tsx'
+import type { Comando, Errore, Fine, Ingresso } from './connessione.ts'
+import { Collegamento, Gioco, Home, TESTO_CODICE_ERRATO, Uscita } from './schermate.tsx'
 
 const DURATA_AVVISO_MS = 2200
 
@@ -26,11 +26,13 @@ function testoErrore(motivo: Errore): string {
     case 'stanza-inesistente':
       return 'Stanza non trovata: controlla il codice o chiedilo di nuovo a chi l’ha creata.'
     case 'codice-non-valido':
-      return 'Il codice non è valido: sono 5 caratteri, senza I, O, 0 e 1.'
+      return TESTO_CODICE_ERRATO
     case 'codice-occupato':
       return 'Non sono riuscito a creare la stanza: riprova.'
     case 'tolto':
-      return 'Sei stato tolto dalla stanza.'
+      return 'L’host ti ha tolto dalla stanza.'
+    case 'partita-in-corso':
+      return 'Partita già iniziata: aspetta che finisca, poi premi di nuovo Entra.'
     default:
       return TESTI_RIFIUTO[motivo]
   }
@@ -44,14 +46,26 @@ export default function Pagina() {
   const [avviso, setAvviso] = useState<{ testo: string; n: number } | null>(null)
   const schermataPrima = useRef<Schermata | null>(null)
 
-  const rifiutato = useCallback((motivo: Errore) => {
+  const avvisa = useCallback((testo: string) => setAvviso(a => ({ testo, n: (a?.n ?? 0) + 1 })), [])
+
+  function lasciaStanza() {
     dimenticaStanza()
     aggiornaIndirizzo(null)
-    setMessaggio(testoErrore(motivo))
+    setInvito('')
     setIngresso(null)
-  }, [])
+  }
 
-  const { vista, rete, invia, adesso, riprova } = useStanza(ingresso, rifiutato)
+  function finisce(motivo: Fine) {
+    if (motivo === 'uscito') return lasciaStanza()
+    dimenticaStanza()
+    // Chi resta fuori per ora riprova dallo stesso link: l'indirizzo sparisce solo se quella stanza non è più per lui.
+    if (motivo !== 'partita-in-corso' && motivo !== 'nome-usato' && motivo !== 'stanza-piena') aggiornaIndirizzo(null)
+    // Una stanza salvata che non esiste più non è un errore di chi apre il sito: non ha scritto nessun codice.
+    setMessaggio(ingresso?.rientro && motivo === 'stanza-inesistente' ? null : testoErrore(motivo))
+    setIngresso(null)
+  }
+
+  const { vista, rete, uscendo, invia, adesso, riprova, esci } = useStanza(ingresso, finisce, () => avvisa('Non riesco a uscire: controlla la rete e riprova'))
   useSchermoAcceso(ingresso !== null)
 
   // Prima del disegno, così chi ricarica la pagina durante la partita non vede passare la Home.
@@ -61,7 +75,7 @@ export default function Pagina() {
     const miaStanza = stanzaSalvata()
     const nome = nomeSalvato()
     setNomeIniziale(nome)
-    if (miaStanza && (!invitato || invitato === miaStanza)) setIngresso({ codice: miaStanza, nome, crea: false })
+    if (miaStanza && (!invitato || invitato === miaStanza)) setIngresso({ codice: miaStanza, nome, crea: false, rientro: true })
     else setInvito(invitato)
     delete document.documentElement.dataset.rientro
   }, [])
@@ -81,9 +95,11 @@ export default function Pagina() {
   }, [codiceVista])
 
   // Suono e vibrazione all'apertura di una riunione, mai dopo una ricarica a riunione già aperta.
+  // Da Ruolo si arriva con Ho capito: lì il segnale è già partito quando la riunione si è aperta.
   const schermata = vista?.schermata ?? null
   useEffect(() => {
-    if (schermata === 'riunione' && schermataPrima.current && schermataPrima.current !== 'riunione') segnaleRiunione()
+    const prima = schermataPrima.current
+    if (schermata === 'riunione' && prima && prima !== 'riunione' && prima !== 'ruolo') segnaleRiunione()
     schermataPrima.current = schermata
   }, [schermata])
 
@@ -93,8 +109,6 @@ export default function Pagina() {
     return () => clearTimeout(timer)
   }, [avviso])
 
-  const avvisa = useCallback((testo: string) => setAvviso(a => ({ testo, n: (a?.n ?? 0) + 1 })), [])
-
   function entra(nome: string, codice: string | null) {
     sbloccaAudio()
     salvaNome(nome)
@@ -103,30 +117,20 @@ export default function Pagina() {
     setIngresso(codice ? { codice, nome, crea: false } : { codice: nuovoCodice(), nome, crea: true })
   }
 
-  function lasciaStanza() {
-    dimenticaStanza()
-    aggiornaIndirizzo(null)
-    setInvito('')
-    setIngresso(null)
-  }
-
   function comanda(comando: Comando) {
     if (vista) invia({ ...comando, f: vista.f } as Azione)
   }
 
-  function esci() {
-    comanda({ a: 'esci' })
-    lasciaStanza()
-  }
-
   return (
     <>
-      {vista ? (
+      {uscendo ? (
+        <Uscita />
+      ) : vista ? (
         <Gioco key={vista.codice} v={vista} rete={rete} comanda={comanda} adesso={adesso} esci={esci} avvisa={avvisa} riprova={riprova} />
       ) : ingresso ? (
         <Collegamento annulla={lasciaStanza} />
       ) : (
-        <Home key={invito} invito={invito} nomeIniziale={nomeIniziale} messaggio={messaggio} entra={entra} />
+        <Home key={`${invito}|${nomeIniziale}`} invito={invito} nomeIniziale={nomeIniziale} messaggio={messaggio} entra={entra} />
       )}
       <div className="avvisi" aria-live="polite">
         {avviso && (

@@ -12,6 +12,7 @@ const ATTESA_PONG_MS = 5000 // alcuni socket restano aperti dopo il sonno del te
 const ATTESA_RITORNO_MS = 2500 // al ritorno sulla pagina si vuole sapere subito se il socket è vivo
 const RIPROVA_MIN_MS = 1000
 const RIPROVA_MAX_MS = 5000
+const USCITA_MAX_MS = 5000 // Esci aspetta la chiusura del server: oltre questo tempo non è arrivato
 const TENTATIVI_CODICE = 8
 const CHIUSO_SOSTITUITO = 4000 // il server chiude così il socket sostituito da uno più recente
 const CHIUSO_USCITO = 4001 // Togli o stanza cancellata: il posto non esiste più
@@ -20,8 +21,9 @@ const CHIAVE_TOKEN = 'sala-sospetti:token'
 const CHIAVE_NOME = 'sala-sospetti:nome'
 const CHIAVE_STANZA = 'sala-sospetti:stanza'
 
-export type Ingresso = { codice: string; nome: string; crea: boolean }
+export type Ingresso = { codice: string; nome: string; crea: boolean; rientro?: boolean } // rientro: nessuno ha scritto un codice
 export type Errore = Rifiuto | 'stanza-inesistente' | 'codice-occupato' | 'codice-non-valido' | 'tolto'
+export type Fine = Errore | 'uscito' // il posto non c'è più: Esci confermato dal server, oppure uno degli errori
 export type StatoRete = 'ok' | 'persa' | 'altrove'
 
 // Le azioni partono senza contatore di fase: lo aggiunge chi conosce la vista corrente.
@@ -89,16 +91,20 @@ export function aggiornaIndirizzo(codice: string | null) {
 }
 
 // ---- Connessione alla stanza ----
-export function useStanza(ingresso: Ingresso | null, alRifiuto: (motivo: Errore) => void) {
+export function useStanza(ingresso: Ingresso | null, alRifiuto: (motivo: Fine) => void, alMancataUscita: () => void) {
   const [vista, setVista] = useState<Vista | null>(null)
   const [rete, setRete] = useState<StatoRete>('persa')
+  const [uscendo, setUscendo] = useState(false)
   const socket = useRef<WebSocket | null>(null)
   const scarto = useRef(0)
   const riprovaOra = useRef<() => void>(() => {})
+  const esciOra = useRef<() => void>(() => {})
   const rifiuto = useRef(alRifiuto)
+  const mancata = useRef(alMancataUscita)
 
   useEffect(() => {
     rifiuto.current = alRifiuto
+    mancata.current = alMancataUscita
   })
 
   useEffect(() => {
@@ -111,8 +117,13 @@ export function useStanza(ingresso: Ingresso | null, alRifiuto: (motivo: Errore)
     let ws: WebSocket | null = null
     let tentativi = 0
     let codiciProvati = 0
+    let aperto = false // il socket corrente ha già portato una vista
+    let scartoSocket = -Infinity
+    let faseNota: number | null = null // contatore di fase dell'ultima vista
+    let esciChiesto = false
     let tempoRiprova: ReturnType<typeof setTimeout> | undefined
     let tempoRisposta: ReturnType<typeof setTimeout> | undefined
+    let tempoUscita: ReturnType<typeof setTimeout> | undefined
 
     // Stacca il socket corrente senza che i suoi eventi tornino qui: ce n'è sempre uno solo.
     function stacca() {
@@ -157,9 +168,12 @@ export function useStanza(ingresso: Ingresso | null, alRifiuto: (motivo: Errore)
         return cade()
       }
       socket.current = ws
+      aperto = false
+      scartoSocket = -Infinity
       aspettaRisposta(ATTESA_APERTURA_MS)
       ws.onmessage = evento => ricevi(evento.data)
       ws.onclose = evento => {
+        if (evento.code === CHIUSO_USCITO && esciChiesto) return smetti('uscito')
         if (evento.code === CHIUSO_USCITO) return smetti(evento.reason === 'stanza-cancellata' ? 'stanza-inesistente' : 'tolto')
         if (evento.code !== CHIUSO_SOSTITUITO) return cade()
         // Un'altra scheda ha preso il posto: riprovare da soli farebbe rimbalzare le due schede all'infinito.
@@ -170,8 +184,12 @@ export function useStanza(ingresso: Ingresso | null, alRifiuto: (motivo: Errore)
     }
 
     function ricevi(dato: unknown) {
-      annullaAttesa()
-      if (typeof dato !== 'string' || dato === 'pong') return
+      if (typeof dato !== 'string') return
+      // Solo il pong dimostra che il filo porta anche i messaggi del telefono: una vista in arrivo non lo dice.
+      if (dato === 'pong') {
+        if (aperto) annullaAttesa()
+        return
+      }
       let messaggio: { v?: Vista; errore?: Errore }
       try {
         messaggio = JSON.parse(dato)
@@ -187,17 +205,43 @@ export function useStanza(ingresso: Ingresso | null, alRifiuto: (motivo: Errore)
 
       const v = messaggio.v
       if (!v) return
-      scarto.current = v.ora - Date.now()
+      if (!aperto) {
+        aperto = true
+        annullaAttesa()
+      }
+      // Una vista rimasta in coda arriva in ritardo: per ogni socket vale il campione con il ritardo minore.
+      scartoSocket = Math.max(scartoSocket, v.ora - Date.now())
+      scarto.current = scartoSocket
       crea = false // La stanza ora esiste: una riconnessione con crea=1 verrebbe rifiutata
       tentativi = 0
+      faseNota = v.f
       scrivi(CHIAVE_STANZA, v.codice)
       setVista(v)
       setRete('ok')
+      mandaEsci()
     }
 
-    function smetti(motivo: Errore) {
+    // Esci con un contatore di fase vecchio viene ignorato: si rimanda a ogni vista finché il server non chiude.
+    function mandaEsci() {
+      if (esciChiesto && faseNota !== null && ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ a: 'esci', f: faseNota }))
+    }
+
+    function chiediUscita() {
+      esciChiesto = true
+      setUscendo(true)
+      mandaEsci()
+      clearTimeout(tempoUscita)
+      tempoUscita = setTimeout(() => {
+        esciChiesto = false
+        setUscendo(false)
+        mancata.current()
+      }, USCITA_MAX_MS)
+    }
+
+    function smetti(motivo: Fine) {
       finito = true
       clearTimeout(tempoRiprova)
+      clearTimeout(tempoUscita)
       stacca()
       rifiuto.current(motivo)
     }
@@ -230,6 +274,7 @@ export function useStanza(ingresso: Ingresso | null, alRifiuto: (motivo: Errore)
     }, PING_MS)
 
     riprovaOra.current = controlla
+    esciOra.current = chiediUscita
     document.addEventListener('visibilitychange', controlla)
     window.addEventListener('pageshow', controlla)
     window.addEventListener('online', controlla)
@@ -240,14 +285,17 @@ export function useStanza(ingresso: Ingresso | null, alRifiuto: (motivo: Errore)
       finito = true
       clearInterval(ping)
       clearTimeout(tempoRiprova)
+      clearTimeout(tempoUscita)
       stacca()
       riprovaOra.current = () => {}
+      esciOra.current = () => {}
       document.removeEventListener('visibilitychange', controlla)
       window.removeEventListener('pageshow', controlla)
       window.removeEventListener('online', controlla)
       window.removeEventListener('pagehide', allaChiusura)
       setVista(null)
       setRete('persa')
+      setUscendo(false)
     }
   }, [ingresso])
 
@@ -257,8 +305,9 @@ export function useStanza(ingresso: Ingresso | null, alRifiuto: (motivo: Errore)
 
   const adesso = useCallback(() => Date.now() + scarto.current, [])
   const riprova = useCallback(() => riprovaOra.current(), [])
+  const esci = useCallback(() => esciOra.current(), [])
 
-  return { vista, rete, invia, adesso, riprova }
+  return { vista, rete, uscendo, invia, adesso, riprova, esci }
 }
 
 // ---- Schermo acceso: errori silenziosi, nessuna differenza tra giocatori ----

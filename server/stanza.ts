@@ -175,7 +175,7 @@ export class Stanza extends DurableObject<Env> {
       if (azione) applica(s, id, azione, ora)
       await this.concludi(s, ora)
     } catch (errore) {
-      // Niente è stato salvato: si scarta il messaggio e l'oggetto resta in piedi.
+      // Si scarta il messaggio e l'oggetto resta in piedi: il prossimo evento riparte dall'ultimo stato salvato.
       console.error('messaggio scartato', errore)
     }
   }
