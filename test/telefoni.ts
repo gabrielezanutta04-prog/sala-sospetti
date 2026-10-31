@@ -656,9 +656,14 @@ async function ingressi() {
   if (!primo || primo.y > 200) segnala(`sala dell'ospite: il primo giocatore è a y=${primo?.y}`)
   await ospite.pagina.setViewportSize(TELEFONO)
 
-  passo('Regole dalla barra in alto, in sala')
+  passo('Regole dalla barra in alto, in sala, con una scheda per ruolo')
   await ospite.tocca('Regole')
   await ospite.giro('regole-sala')
+  for (const [scheda, frase] of [['Civile', 'premi Report'], ['Assassino', 'si apre il riquadro'], ['Morto', 'Siediti per terra'], ['Riunione', 'Salta il voto'], ['Host', 'chi crea la stanza']]) {
+    await ospite.pagina.getByRole('tab', { name: scheda }).tap()
+    await ospite.pagina.locator('.lista-regole', { hasText: frase }).waitFor({ timeout: 3000 })
+    await ospite.giro(`regole-${scheda.toLowerCase()}`)
+  }
   await ospite.tocca('Chiudi')
 }
 
@@ -892,6 +897,8 @@ async function secondaRiunione(A: Telefono, C: Telefono, T: Telefono) {
   await T.tocca('Sì, sono morto')
   await T.pagina.locator('.tag.morto').waitFor()
   await T.pagina.getByText('Sei fuori dalle votazioni per il resto della partita').waitFor()
+  await T.pagina.getByText('Siediti per terra guardando un muro e non muoverti').waitFor()
+  if (await T.pagina.locator('.spunta').count()) segnala('chi è morto ha ancora il tasto Fatto')
   T.vivo = false
   await T.giro('partita-morto')
 

@@ -21,7 +21,7 @@ const MESSAGGI_AL_SECONDO = 20 // per socket. I ping non contano: risponde il ru
 const TENTATIVI_MAX = 600 // tentativi di aprire un socket verso una stanza, per IP e per finestra
 const FINESTRA_TENTATIVI_MS = 60 * 1000
 const CHIAVE = 'stanza'
-const VERSIONE = 3 // si legge da fuori: dice se l'ultimo deploy è arrivato
+const VERSIONE = 4 // si legge da fuori: dice se l'ultimo deploy è arrivato
 
 // GIRO_MS e TENTATIVI_MAX servono solo a test/rete.ts: con il giro da 10 s l'oggetto non resta mai fermo abbastanza da ibernarsi.
 type Env = { STANZA: DurableObjectNamespace<Stanza>; SCALA_TEMPI?: string; GIRO_MS?: string; TENTATIVI_MAX?: string }

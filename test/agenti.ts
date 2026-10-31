@@ -386,12 +386,12 @@ function inPartita(v: VistaPartita, m: Memoria, t: Tratti, occhiata: number): De
     }
   }
 
-  // Le task: anche i morti continuano, come dice il dialogo Sono morto.
-  if (v.task && m.adesso >= v.taskDa && m.adesso >= r.fintaFino) {
+  // Le task: chi è fuori resta seduto e non ne fa più.
+  if (v.io.vivo && v.task && m.adesso >= v.taskDa && m.adesso >= r.fintaFino) {
     r.fineTaskIl ??= m.adesso + tra(m, 0.7 * t.durataTask, 1.3 * t.durataTask)
     if (m.adesso < r.fineTaskIl) return { attesa: Math.min(occhiata, r.fineTaskIl - m.adesso) }
     r.fineTaskIl = null
-    const finge = r.ruolo === 'assassino' && m.caso() >= (v.io.vivo ? t.spuntaDaAssassino : 0)
+    const finge = r.ruolo === 'assassino' && m.caso() >= t.spuntaDaAssassino
     if (!finge) return { premi: { a: 'spunta', f }, attesa: occhiata }
     r.fintaFino = m.adesso + 2 * MIN
   }

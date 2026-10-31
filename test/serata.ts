@@ -214,6 +214,7 @@ function azioneAccettata(b: Banco, id: number, az: Azione) {
     case 'spunta':
       if (!a) errore('C3', 'spunta senza partita')
       if (b.ora < (a.taskPronta.get(id) ?? 0)) errore('C5', `spunta in anticipo di ${id}`)
+      if (!b.s.giocatori.find(g => g.id === id)?.vivo) errore('C5', `spunta da chi è fuori: ${id}`)
       a.taskPronta.set(id, b.ora + ATTESO.task)
       a.spunte++
       vero(b.s.giocatori.some(g => g.id === id && g.task !== g.taskFatta), 'C5: nuova task uguale alla precedente')
@@ -833,7 +834,7 @@ function s5() {
   const v = inRiunione(b, c1)
   vero(v.totale === 2 && v.votati === 2, 'conteggi dopo Sono morto')
   vero(v.rivota && v.fuori.includes(giocatore(b, piero).nome), 'Piero tra i morti e voti da rifare')
-  vero(giocatore(b, piero).causa === 'morto', 'causa di Piero')
+  vero(giocatore(b, piero).causa === 'trovato', 'causa di Piero: in riunione il morto è già noto a tutti')
 
   devePremere(b, c1, { a: 'vota', x: assassino.id })
   devePremere(b, assassino, { a: 'vota', x: c1.id })
@@ -1111,7 +1112,7 @@ function s9() {
   avanza(e, pronta)
   devePremere(e, stanza[2], { a: 'emergency' })
 
-  // Da morti restano le task ed Esci.
+  // Da morti resta solo Esci.
   const c = nuovoBanco(9002)
   const tavolo = iscrivi(c, 6)
   const ruoli = parti(c, tavolo, { task: 40, assassini: 2 })
@@ -1122,7 +1123,7 @@ function s9() {
   vero(!nega(c, ruoli.civ[0], { a: 'report' }), 'Report da morto')
   vero(!nega(c, ruoli.civ[0], { a: 'emergency' }), 'Emergency da morto')
   vero(!nega(c, ruoli.civ[0], { a: 'sonoMorto' }), 'Sono morto due volte')
-  devePremere(c, ruoli.civ[0], { a: 'spunta' })
+  vero(!nega(c, ruoli.civ[0], { a: 'spunta' }), 'Fatto da morto')
   devePremere(c, ruoli.civ[0], { a: 'esci' })
 }
 
@@ -1414,14 +1415,13 @@ function coperturaTask() {
     for (let turno = 0; turno < quanti; turno++) {
       ora += ATTESO.task
       for (const g of s.giocatori) segnale(s, g.id, ora)
-      for (const g of s.giocatori) {
+      for (const g of s.giocatori.filter(x => x.vivo)) {
         vero(applica(s, g.id, { a: 'spunta', f: s.f }, ora), 'spunta rifiutata')
         vero(g.task !== g.taskFatta, `task ripetuta al turno ${turno}`)
         vero(!g.task?.includes('{'), `segnaposto rimasto: ${g.task}`)
         if (!g.task?.startsWith(SEGNO_MISSIONE)) continue
         missioni++
         const nominati = s.giocatori.filter(a => g.task?.includes(a.nome))
-        vero(g.vivo, 'missione segreta a chi è fuori gioco')
         vero(nominati.length === 1 && nominati[0].id !== g.id && nominati[0].id === g.missioneSu, `missione segreta sul nome sbagliato: ${g.task}`)
         if (nominati[0].id === vittima?.id) suVittima++
       }
@@ -1436,6 +1436,12 @@ function coperturaTask() {
   vero(applica(s, vittima?.id ?? -1, { a: 'sonoMorto', f: s.f }, ora), 'Sono morto rifiutato')
   giri(1000)
   vero(suVittima > 0, 'chi ha premuto Sono morto non viene più nominato: lo rivelerebbe')
+
+  // Dopo una riunione il morto è noto a tutti: non si siede più e non viene più nominato.
+  const vivo = s.giocatori.find(g => g.vivo)
+  vero(applica(s, vivo?.id ?? -1, { a: 'report', f: s.f }, ora), 'Report rifiutato')
+  vero(vittima?.causa === 'trovato', 'la riunione non ha reso noto il morto')
+  vero(vista(s, vittima?.id ?? -1, ora).io.causa === 'trovato', 'il telefono del morto non lo sa')
 }
 
 // Sei giocatori e spunte a giro finché uno non ha una missione in attesa.
@@ -1467,10 +1473,6 @@ function missioniInAttesa() {
     const testo = morto.chi.task
     vero(applica(morto.s, morto.nominato, { a: 'sonoMorto', f: morto.s.f }, morto.ora), 'Sono morto rifiutato')
     vero(morto.chi.task === testo, `seme ${seme}: la missione è cambiata col Sono morto del nominato, che così si scopre`)
-
-    const propria = conMissione(seme)
-    vero(applica(propria.s, propria.chi.id, { a: 'sonoMorto', f: propria.s.f }, propria.ora), 'Sono morto rifiutato')
-    annullata(propria.chi, 'il Sono morto di chi la teneva')
 
     const voto = conMissione(seme)
     vero(applica(voto.s, voto.chi.id, { a: 'report', f: voto.s.f }, voto.ora), 'Report rifiutato')

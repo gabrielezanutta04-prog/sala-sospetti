@@ -103,7 +103,7 @@ export const TESTI_RIFIUTO: Record<Rifiuto, string> = {
 export type Fase = 'sala' | 'partita' | 'riunione' | 'esito' | 'fine'
 export type Schermata = 'sala' | 'ruolo' | 'partita' | 'riunione' | 'esito' | 'fine'
 export type Ruolo = 'civile' | 'assassino'
-export type Causa = 'morto' | 'eliminato'
+export type Causa = 'morto' | 'trovato' | 'eliminato' // morto: ancora seduto da trovare. trovato: una riunione lo ha reso noto
 export type Vincitore = 'civili' | 'assassini'
 export type Motivo = 'barra' | 'assassini' | 'maggioranza'
 export type TipoRiunione = 'report' | 'emergency'
@@ -308,11 +308,11 @@ function pesca(s: Stato, escluso: string | null): string {
 }
 
 // Dopo una spunta. Il ruolo non conta: chi riceve la missione e chi viene nominato li decide solo il caso.
-// Chi ha premuto Sono morto resta nominabile, altrimenti la missione rivelerebbe che qualcun altro non l'ha ancora premuto.
+// Chi è morto resta nominabile finché nessuno lo sa, altrimenti la missione rivelerebbe che qualcun altro è ancora vivo.
 function prossimaTask(s: Stato, g: Giocatore, ora: number): string {
   g.missioneSu = null
-  const altri = s.giocatori.filter(a => a.id !== g.id && a.causa !== 'eliminato' && online(a, ora))
-  if (g.vivo && altri.length > 0 && casuale(s) < PROBABILITA_MISSIONE) {
+  const altri = s.giocatori.filter(a => a.id !== g.id && (a.vivo || a.causa === 'morto') && online(a, ora))
+  if (altri.length > 0 && casuale(s) < PROBABILITA_MISSIONE) {
     const testo = MISSIONI_SEGRETE[Math.floor(casuale(s) * MISSIONI_SEGRETE.length)]
     const scelto = altri[Math.floor(casuale(s) * altri.length)]
     const missione = SEGNO_MISSIONE + testo.replace('{nome}', () => scelto.nome)
@@ -324,15 +324,13 @@ function prossimaTask(s: Stato, g: Giocatore, ora: number): string {
   return pesca(s, g.taskFatta)
 }
 
-function annullaMissione(s: Stato, g: Giocatore) {
-  if (!g.task?.startsWith(SEGNO_MISSIONE)) return
-  g.task = pesca(s, g.taskFatta)
-  g.missioneSu = null
-}
-
 // Solo per uscite che tutti vedono: sul Sono morto del nominato un testo che cambia rivelerebbe chi l'ha premuto.
 function annullaMissioniSu(s: Stato, id: number) {
-  for (const g of s.giocatori) if (g.missioneSu === id) annullaMissione(s, g)
+  for (const g of s.giocatori) {
+    if (g.missioneSu !== id) continue
+    g.task = pesca(s, g.taskFatta)
+    g.missioneSu = null
+  }
 }
 
 export const maxAssassini = (giocatori: number) => Math.max(1, Math.floor((giocatori - 1) / 2))
@@ -428,6 +426,7 @@ function controllaVittoria(s: Stato, ora: number) {
 
 // ---- Riunione ----
 function apriRiunione(s: Stato, tipo: TipoRiunione, g: Giocatore) {
+  for (const x of s.giocatori) if (x.causa === 'morto') x.causa = 'trovato'
   s.riunione = { tipo, daId: g.id, daNome: g.nome, voti: {}, rivotare: [], votanti: [], fuori: [], esito: null }
   s.fase = 'riunione'
   s.f++
@@ -463,7 +462,6 @@ function controllaChiusura(s: Stato, ora: number): boolean {
   if (eliminato) {
     eliminato.vivo = false
     eliminato.causa = 'eliminato'
-    annullaMissione(s, eliminato)
     annullaMissioniSu(s, eliminato.id)
   }
   s.fase = 'esito'
@@ -653,7 +651,7 @@ function esegui(s: Stato, g: Giocatore, az: Azione, ora: number): boolean {
       return true
 
     case 'spunta':
-      if (qui !== 'partita' || !g.task || ora < g.taskDa) return false
+      if (qui !== 'partita' || !g.vivo || !g.task || ora < g.taskDa) return false
       g.taskFatta = g.task
       g.task = prossimaTask(s, g, ora)
       g.taskDa = ora + s.durate.task
@@ -669,8 +667,7 @@ function esegui(s: Stato, g: Giocatore, az: Azione, ora: number): boolean {
     case 'sonoMorto':
       if ((qui !== 'partita' && qui !== 'riunione') || !g.vivo) return false
       g.vivo = false
-      g.causa = 'morto'
-      annullaMissione(s, g)
+      g.causa = qui === 'riunione' ? 'trovato' : 'morto'
       dopoPerdita(s, g.id, ora)
       return true
 

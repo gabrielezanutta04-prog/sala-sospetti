@@ -600,7 +600,8 @@ html[data-rientro] .home {
 }
 
 /* Prima dell'aggancio di React i tasti non risponderebbero: si vedono spenti. I campi restano buoni, il testo scritto non si perde */
-html[data-attesa] .home .tasto {
+html[data-attesa] .home .tasto,
+html[data-attesa] .home .guida-scheda {
   opacity: 0.45;
   pointer-events: none;
 }
@@ -744,6 +745,43 @@ html[data-attesa='invito'] .home .separatore {
 
 .regole[open] summary::after {
   content: '\2212';
+}
+
+.guida-schede {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 2px 0 8px;
+}
+
+.guida-scheda {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--linea-forte);
+  border-radius: 999px;
+  background: none;
+  color: var(--tenue);
+  font: 600 14px var(--f-titolo);
+}
+
+.guida-scheda[aria-selected='true'] {
+  border-color: var(--primario);
+  background: var(--primario);
+  color: var(--primario-ink);
+}
+
+.guida-pannelli {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.guida-pannelli > .lista-regole {
+  grid-area: 1 / 1;
+  align-content: start;
+}
+
+.guida-pannelli > [data-spenta] {
+  visibility: hidden;
 }
 
 .lista-regole {
@@ -1182,6 +1220,11 @@ html[data-attesa='invito'] .home .separatore {
   display: grid;
   gap: 14px;
   min-width: 0;
+}
+
+/* Chi è fuori non ha task: i tasti stanno al centro invece di lasciare un buco */
+.corpo:has(.colonna-task:empty) {
+  justify-content: safe center;
 }
 
 .colonna-task {
@@ -1791,6 +1834,13 @@ html[data-attesa='invito'] .home .separatore {
   .fascicolo {
     padding: 12px;
     gap: 8px;
+  }
+}
+
+@media (max-height: 480px) and (orientation: landscape) {
+  .partita:has(.colonna-task:empty) {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
   }
 }
 

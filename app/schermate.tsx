@@ -154,33 +154,132 @@ function useConferma(valore: unknown, confermato: () => void, perso: () => void)
 }
 
 // Le stesse regole sulla Home e nel tasto Regole della barra: uguali per tutti, quindi senza nulla che dipenda dal ruolo.
-function ListaRegole() {
+const SCHEDE = [
+  ['partita', 'La partita'],
+  ['civile', 'Civile'],
+  ['assassino', 'Assassino'],
+  ['morto', 'Morto'],
+  ['riunione', 'Riunione'],
+  ['host', 'Host'],
+] as const
+type Scheda = (typeof SCHEDE)[number][0]
+
+function VociGuida({ scheda }: { scheda: Scheda }) {
+  switch (scheda) {
+    case 'partita':
+      return (
+        <>
+          <li>Ognuno riceve in segreto un ruolo: civile o assassino. Le altre schede spiegano cosa fa ciascuno.</li>
+          <li>
+            Tutti hanno delle task da fare davvero, in casa. Finita una, si preme <b>Fatto</b> e la barra verde cresce per tutti, anche con le
+            spunte degli assassini.
+          </li>
+          <li>
+            Ogni tanto, al posto di una task, arriva una <b>missione segreta</b> su un altro giocatore. Può capitare a chiunque, civile o
+            assassino, e vale come una task: finita, si preme <b>Fatto</b>.
+          </li>
+          <li>Prima di iniziare decidete insieme come si elimina, per esempio con un tocco sulla spalla.</li>
+          <li>I civili vincono con la barra piena o senza più assassini. Gli assassini vincono se pareggiano i civili.</li>
+        </>
+      )
+    case 'civile':
+      return (
+        <>
+          <li>
+            Fai le task e premi <b>Fatto</b>: con la barra verde piena i civili vincono.
+          </li>
+          <li>Osserva gli altri: chi segue qualcuno può essere un assassino, oppure avere una missione segreta.</li>
+          <li>
+            Hai trovato qualcuno seduto per terra che guarda un muro? È un morto: premi <b>Report</b>.
+          </li>
+          <li>
+            Sospetti qualcuno? Premi <b>Emergency</b>, una ogni {minuti(COOLDOWN)} minuti per tutta la stanza.
+          </li>
+        </>
+      )
+    case 'assassino':
+      return (
+        <>
+          <li>
+            Tieni premuta per un secondo la barra col codice stanza, non quella verde: si apre il riquadro <b>Uccidi</b>. Per gli altri il gesto
+            non fa nulla.
+          </li>
+          <li>
+            Quando il riquadro dice «pronto», elimina qualcuno di nascosto con il gesto deciso all&apos;inizio, poi premi <b>Uccidi</b>.
+            L&apos;attesa è di {minuti(KILL_CD)} minuti all&apos;inizio, dopo ogni eliminazione e dopo ogni riunione.
+          </li>
+          <li>
+            Nascondi il riquadro con la <b>x</b> nell&apos;angolo o ripetendo il gesto.
+          </li>
+          <li>
+            Fai finta di fare le task: se premi <b>Fatto</b> anche tu riempi la barra dei civili.
+          </li>
+          <li>Se gli assassini sono due, la schermata del ruolo vi dice chi è il complice.</li>
+        </>
+      )
+    case 'morto':
+      return (
+        <>
+          <li>
+            Ti hanno eliminato? Premi <b>Sono morto</b> e non dire chi è stato.
+          </li>
+          <li>Siediti per terra guardando un muro e non muoverti, senza parlare: così chi passa capisce subito.</li>
+          <li>Non fai più task, non voti e non puoi aprire riunioni.</li>
+          <li>Quando si apre una riunione puoi alzarti e guardare in silenzio, senza aiutare nessuno.</li>
+          <li>Chi esce col voto è fuori allo stesso modo, ma non si siede: guarda in silenzio.</li>
+        </>
+      )
+    case 'riunione':
+      return (
+        <>
+          <li>
+            <b>Report</b> se hai trovato un morto, <b>Emergency</b> se sospetti qualcuno. Chi la apre lo dice ad alta voce e ci si ritrova tutti.
+          </li>
+          <li>
+            Se ne parla a voce, poi ognuno tocca un nome o <b>Salta il voto</b> e preme <b>Conferma</b>.
+          </li>
+          <li>
+            Chi prende più voti è fuori e tutti vedono il suo ruolo. Non esce nessuno se c&apos;è parità, anche con i salti, o se i salti sono di
+            più.
+          </li>
+          <li>«Fuori dalle votazioni» dice chi non gioca più: solo i nomi, non come è successo.</li>
+        </>
+      )
+    case 'host':
+      return (
+        <>
+          <li>
+            È chi crea la stanza: sceglie il numero di task e di assassini e preme <b>Start</b>.
+          </li>
+          <li>Con 10 o più giocatori conviene scegliere 2 assassini.</li>
+          <li>Se resta senza segnale, il ruolo passa da solo a un altro giocatore.</li>
+          <li>Se qualcuno resta senza segnale a lungo, può toglierlo dalla stanza.</li>
+        </>
+      )
+  }
+}
+
+// Una guida uguale per tutti: la scheda aperta resta su questo telefono e non dipende dal ruolo.
+function Guida() {
+  const [scheda, setScheda] = useState<Scheda>('partita')
   return (
-    <ul className="lista-regole">
-      <li>Ognuno riceve in segreto un ruolo: civile o assassino.</li>
-      <li>
-        Tutti hanno delle task da fare davvero, in casa. Finita una, si preme <b>Fatto</b> e la barra verde cresce per tutti, anche con le
-        spunte degli assassini.
-      </li>
-      <li>
-        Ogni tanto, al posto di una task, arriva una <b>missione segreta</b> su un altro giocatore. Può capitare a chiunque, civile o assassino,
-        e vale come una task: finita, si preme <b>Fatto</b>.
-      </li>
-      <li>
-        Gli assassini eliminano di persona, di nascosto: prima di iniziare decidete insieme come, per esempio con un tocco sulla spalla. Chi
-        viene eliminato non dice chi è stato e preme <b>Sono morto</b>: non vota più, ma può continuare a fare le task.
-      </li>
-      <li>
-        Gli assassini aprono il riquadro <b>Uccidi</b> tenendo premuta per un secondo la barra col codice stanza, non quella verde: per gli
-        altri il gesto non fa nulla. Si elimina solo quando il riquadro dice «pronto», poi si preme Uccidi. L&apos;attesa è di{' '}
-        {minuti(KILL_CD)} minuti all&apos;inizio, dopo ogni eliminazione e dopo ogni riunione.
-      </li>
-      <li>
-        Hai trovato un morto? <b>Report</b>. Sospetti qualcuno? <b>Emergency</b>, una ogni {minuti(COOLDOWN)} minuti. Si vota e chi prende più
-        voti è fuori. Non esce nessuno se c&apos;è parità, anche con i salti, o se i salti sono di più.
-      </li>
-      <li>I civili vincono con la barra piena o senza più assassini. Gli assassini vincono se pareggiano i civili.</li>
-    </ul>
+    <>
+      <div className="guida-schede" role="tablist" aria-label="Guida">
+        {SCHEDE.map(([id, titolo]) => (
+          <button key={id} type="button" role="tab" aria-selected={id === scheda} className="guida-scheda" onClick={() => setScheda(id)}>
+            {titolo}
+          </button>
+        ))}
+      </div>
+      {/* Tutte nella stessa cella: l'altezza resta quella della più lunga e cambiando scheda nulla si sposta sotto il dito */}
+      <div className="guida-pannelli">
+        {SCHEDE.map(([id]) => (
+          <ul key={id} className="lista-regole" role="tabpanel" data-spenta={id === scheda ? undefined : ''}>
+            <VociGuida scheda={id} />
+          </ul>
+        ))}
+      </div>
+    </>
   )
 }
 
@@ -402,7 +501,7 @@ export function Home({ invito, codiceProvato, nomeIniziale, messaggio, entra }: 
 
         <details className="regole">
           <summary>Come si gioca</summary>
-          <ListaRegole />
+          <Guida />
         </details>
 
         <p className="nota centrata">Apri il sito in Safari o Chrome, non dentro WhatsApp o Instagram.</p>
@@ -509,7 +608,7 @@ function BarraAlta({ v, gesto, regole, esci }: { v: Vista; gesto: () => void; re
         <span data-privato className="ba-nome">
           {v.io.nome}
         </span>
-        {!v.io.vivo && <span className="tag morto">Morto</span>}
+        {!v.io.vivo && <span className="tag morto">{v.io.causa === 'eliminato' ? 'Fuori' : 'Morto'}</span>}
         {/* Niente Tasto: le regole si leggono anche senza rete */}
         <button type="button" className="tasto in-barra" onClick={regole}>
           Regole
@@ -830,7 +929,7 @@ function Ruolo({ v, comanda, avvisa }: { v: VistaRuolo; comanda: Comanda; avvisa
                   Complici: <b>{v.complici.join(', ')}</b>
                 </p>
               )}
-              <p>Elimina i civili di persona e di nascosto, senza farti scoprire. Chi elimini premerà «Sono morto».</p>
+              <p>Elimina i civili di persona e di nascosto, senza farti scoprire. Chi elimini premerà «Sono morto» e si siederà per terra guardando un muro.</p>
               <p>
                 Dopo Ho capito, <b>tieni premuta per un secondo la barra in alto con il codice stanza</b>: si apre il riquadro Uccidi. Per
                 gli altri quel gesto non fa nulla.
@@ -843,7 +942,7 @@ function Ruolo({ v, comanda, avvisa }: { v: VistaRuolo; comanda: Comanda; avvisa
             </>
           ) : (
             <>
-              <p>Completa le task e scopri chi sono gli assassini. Se ti eliminano, premi «Sono morto» e non dire chi è stato.</p>
+              <p>Completa le task e scopri chi sono gli assassini. Se ti eliminano, premi «Sono morto», non dire chi è stato e siediti per terra guardando un muro.</p>
               <p>
                 Tra voi{' '}
                 {v.assassini === 1 ? (
@@ -944,7 +1043,11 @@ function Partita({ v, ora, comanda, avvisa, sonoMorto, uccidiVisibile, chiudiUcc
     <>
       <main className="corpo entrata">
         {morto && (
-          <p className="avviso-fisso caldo">Sei fuori dalle votazioni. Puoi continuare a fare le task, ma non puoi più segnalare né votare.</p>
+          <p className="avviso-fisso caldo">
+            {v.io.causa === 'morto'
+              ? 'Siediti per terra guardando un muro e non muoverti, senza parlare. Quando si apre una riunione puoi alzarti e guardare in silenzio.'
+              : 'Sei fuori dal gioco: guarda in silenzio, senza aiutare nessuno.'}
+          </p>
         )}
         <div className="partita">
           <div className="azioni">
@@ -989,32 +1092,34 @@ function Partita({ v, ora, comanda, avvisa, sonoMorto, uccidiVisibile, chiudiUcc
                 Ultima riunione d&apos;emergenza convocata da <span data-privato>{chiEmergency}</span>.
               </p>
             )}
-            <section className="task">
-              <div data-privato className="task-dentro">
-                <div>
-                  <p className="occhiello">{missione ? '🥚 Missione segreta' : 'La tua task'}</p>
-                  <p className="task-testo">{missione ?? testoTask}</p>
-                  <p className="nota">{inAttesa ? 'Prossima task appena finisce il timer.' : 'Premi Fatto quando hai finito: la barra verde cresce per tutti.'}</p>
-                </div>
-                {inAttesa ? (
-                  <div className="spunta fatta" role="timer">
-                    <IconaSpunta />
-                    <span className="mono">{mmss(v.taskDa - ora)}</span>
+            {!morto && (
+              <section className="task">
+                <div data-privato className="task-dentro">
+                  <div>
+                    <p className="occhiello">{missione ? '🥚 Missione segreta' : 'La tua task'}</p>
+                    <p className="task-testo">{missione ?? testoTask}</p>
+                    <p className="nota">{inAttesa ? 'Prossima task appena finisce il timer.' : 'Premi Fatto quando hai finito: la barra verde cresce per tutti.'}</p>
                   </div>
-                ) : (
-                  <Tasto
-                    className="spunta"
-                    aria-label="Segna la task come fatta"
-                    onClick={() => {
-                      comanda({ a: 'spunta' })
-                      confermaTask()
-                    }}
-                  >
-                    Fatto
-                  </Tasto>
-                )}
-              </div>
-            </section>
+                  {inAttesa ? (
+                    <div className="spunta fatta" role="timer">
+                      <IconaSpunta />
+                      <span className="mono">{mmss(v.taskDa - ora)}</span>
+                    </div>
+                  ) : (
+                    <Tasto
+                      className="spunta"
+                      aria-label="Segna la task come fatta"
+                      onClick={() => {
+                        comanda({ a: 'spunta' })
+                        confermaTask()
+                      }}
+                    >
+                      Fatto
+                    </Tasto>
+                  )}
+                </div>
+              </section>
+            )}
           </div>
         </div>
       </main>
@@ -1023,7 +1128,7 @@ function Partita({ v, ora, comanda, avvisa, sonoMorto, uccidiVisibile, chiudiUcc
         <Tasto className="tasto grande tratteggiato" disabled={morto} onClick={sonoMorto}>
           {morto ? 'Fuori dalle votazioni' : 'Sono morto'}
         </Tasto>
-        {!morto && <p className="nota centrata spiega-morto">Premilo se un assassino ti ha eliminato: uscirai dalle votazioni.</p>}
+        {!morto && <p className="nota centrata spiega-morto">Premilo se ti hanno eliminato, poi siediti per terra guardando un muro.</p>}
       </footer>
     </>
   )
@@ -1264,7 +1369,7 @@ function DialogoRegole({ chiudi }: { chiudi: () => void }) {
       <div className="dialogo" role="dialog" aria-modal="true" aria-labelledby="titolo-dialogo">
         <h2 id="titolo-dialogo">Come si gioca</h2>
         <div className="dialogo-scorre">
-          <ListaRegole />
+          <Guida />
         </div>
         <button type="button" className="tasto primario" onClick={chiudi}>
           Chiudi
@@ -1358,7 +1463,7 @@ export function Gioco({ v, rete, comanda, adesso, esci, avvisa, riprova }: Props
         {aperta?.tipo === 'morto' && (
           <Dialogo
             titolo="Ti hanno eliminato?"
-            testo="Per il resto della partita non potrai votare né ricevere voti, e non potrai più segnalare o convocare riunioni. Le task puoi continuare a farle. Non si torna indietro."
+            testo={`Per il resto della partita non farai più task, non potrai votare né ricevere voti e non potrai convocare riunioni.${v.schermata === 'partita' ? ' Siediti per terra guardando un muro.' : ''} Non si torna indietro.`}
             no="Annulla"
             si="Sì, sono morto"
             alNo={chiudi}
