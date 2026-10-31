@@ -42,6 +42,12 @@ export const TASKS = [
   'Cammina lungo tutte le pareti di una stanza',
   "Tocca la porta d'ingresso e torna indietro",
   'Attraversa tutte le stanze del piano senza fermarti',
+  'Fai battle flip in terrazzo almeno 2 volte',
+  'Fai una piramide di bicchieri con base 4',
+  'Spegni un interruttore per 10 secondi e riaccendilo',
+  'Batti il 5 a 5 giocatori',
+  'Abbatti alcuni bersagli sul tavolo con la pistola a pallini',
+  'Svolgi la task di un altro giocatore al posto suo',
 ]
 
 // ---- Tempi modificabili ----
