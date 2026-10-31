@@ -4,8 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { generaCodice } from '../gioco/regole.ts'
 import type { Azione, Rifiuto, Vista } from '../gioco/regole.ts'
 
-// Sostituire INDIRIZZO con il sottodominio workers.dev quando il server è pubblicato.
-const SERVER_PUBBLICO = 'wss://sala-sospetti.INDIRIZZO.workers.dev'
+const SERVER_PUBBLICO = 'wss://sala-sospetti.zanna.workers.dev'
 
 const PING_MS = 10_000
 const ATTESA_APERTURA_MS = 8000 // senza una vista entro questo tempo il socket non è buono
