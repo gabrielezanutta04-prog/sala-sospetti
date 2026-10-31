@@ -27,14 +27,15 @@ export const viewport: Viewport = {
   ],
 }
 
-// Eseguito prima del disegno: chi rientra in una stanza non deve veder passare la Home.
-const rientro = `try{if(localStorage.getItem('sala-sospetti:stanza'))document.documentElement.dataset.rientro='1'}catch(e){}`
+// Eseguito prima del disegno: chi rientra in una stanza non deve veder passare la Home, e finché il JavaScript non arriva
+// i tasti della Home non devono sembrare attivi. Dal link d'invito non si propone nemmeno Crea stanza. Pagina toglie entrambi.
+const avvio = `document.documentElement.dataset.attesa=/[?&]stanza=[a-z0-9]{5}(&|$)/i.test(location.search)?'invito':'1';try{if(localStorage.getItem('sala-sospetti:stanza'))document.documentElement.dataset.rientro='1'}catch(e){}`
 
 export default function Layout({ children }: { children: ReactNode }) {
   return (
     <html lang="it" className={`${titolo.variable} ${mono.variable}`} suppressHydrationWarning>
       <body>
-        <script dangerouslySetInnerHTML={{ __html: rientro }} />
+        <script dangerouslySetInnerHTML={{ __html: avvio }} />
         {children}
       </body>
     </html>

@@ -28,7 +28,7 @@ export const TASKS = [
   "Conta le sedie della casa e di' il numero a un altro giocatore",
   'Conta i quadri o le foto appesi in una stanza',
   'Guarda fuori da una finestra per dieci secondi',
-  'Fai cinque flessioni appoggiato al muro',
+  'Fai cinque flessioni con le mani al muro',
   "Cammina all'indietro per dieci passi",
   'Stai in equilibrio su un piede per 15 secondi',
   'Piega un tovagliolo o un foglio e lascialo sul tavolo',
@@ -301,15 +301,36 @@ export function generaCodice(caso: () => number): string {
   return codice
 }
 
+// Caratteri che non si vedono: direzione del testo, larghezza zero e riempitivi come U+2800 e U+3164, che per Unicode non sono spazi.
+// Nel nome mostrato si tolgono, ma la prima alternativa salva le emoji composte: con i toni, i selettori, i tag delle bandiere
+// e U+200D seguito da un'altra emoji restano intere, e un nome di sola emoji resta valido.
+const NASCOSTI_NEL_NOME = /(\p{Extended_Pictographic}(?:[\uFE0F\u{1F3FB}-\u{1F3FF}\u{E0020}-\u{E007F}]|\u200D\p{Extended_Pictographic})*)|[\p{Cf}\p{Default_Ignorable_Code_Point}\u2800]/gu
+const NASCOSTI_NELLA_CHIAVE = /[\p{Cc}\p{Cf}\p{Default_Ignorable_Code_Point}\u2800]/gu
+
+// Lettere cirilliche che si leggono come le latine scritte nella stessa posizione: «Vеra» con la е russa è lo stesso nome di «Vera».
+const SOSIA_CIRILLICI = 'авеіјкмнорсѕтух'
+const SOSIA_LATINI = 'abeijkmhopcstyx'
+
 function pulisciNome(nome: string): string {
   if (typeof nome !== 'string') return ''
-  const pulito = nome.normalize('NFC').replace(/\p{Cc}/gu, ' ').replace(/\s+/g, ' ').trim()
+  const pulito = nome
+    .normalize('NFC')
+    .replace(/\p{Cc}/gu, ' ')
+    .replace(NASCOSTI_NEL_NOME, (_, emoji?: string) => emoji ?? '')
+    .replace(/\s+/g, ' ')
+    .trim()
   return Array.from(pulito).slice(0, NOME_MAX).join('').trim()
 }
 
-// Forma usata solo per confrontare: «anna » e «Anna» sono lo stesso nome.
+// Forma usata solo per confrontare: «anna » e «Anna» sono lo stesso nome. Se resta vuota il nome non ha nulla di visibile.
 function chiaveNome(nome: string): string {
-  return nome.normalize('NFKC').replace(/[\p{Cc}\p{Cf}]/gu, '').replace(/\s+/g, ' ').trim().toLowerCase()
+  return nome
+    .normalize('NFKC')
+    .replace(NASCOSTI_NELLA_CHIAVE, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase()
+    .replace(/./gu, c => SOSIA_LATINI[SOSIA_CIRILLICI.indexOf(c)] ?? c)
 }
 
 const POSTO_VUOTO = { ruolo: null, vivo: true, causa: null, ruoloVisto: false, task: null, taskFatta: null, taskDa: 0, uccidiDa: null }

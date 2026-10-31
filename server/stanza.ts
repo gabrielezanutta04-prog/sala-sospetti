@@ -11,17 +11,23 @@ import type { Azione, Stato } from '../gioco/regole.ts'
 const SOSTITUITO = 4000 // lo stesso giocatore ha aperto un altro socket
 const USCITO = 4001 // Esci, Togli o stanza cancellata
 const RIFIUTATO = 4002 // ingresso rifiutato, il motivo è nel messaggio {errore}
+// Fuori da quella regola: chi manda più messaggi di quanti ne possa mandare un dito viene staccato, e un telefono vero si ricollega.
+const TROPPI_MESSAGGI = 1008
 
 const GIRO_MS = 10 * 1000 // giro delle presenze
 const SILENZIO_MS = 6 * 60 * 60 * 1000 // senza segnali da tanto, la stanza viene cancellata
 const MESSAGGIO_MAX = 1024
+const MESSAGGI_AL_SECONDO = 20 // per socket. I ping non contano: risponde il runtime e l'oggetto non li vede
+const TENTATIVI_MAX = 600 // tentativi di aprire un socket verso una stanza, per IP e per finestra
+const FINESTRA_TENTATIVI_MS = 60 * 1000
 const CHIAVE = 'stanza'
 
-// GIRO_MS serve solo a test/rete.ts: con il giro da 10 s l'oggetto non resta mai fermo abbastanza da ibernarsi.
-type Env = { STANZA: DurableObjectNamespace<Stanza>; SCALA_TEMPI?: string; GIRO_MS?: string }
+// GIRO_MS e TENTATIVI_MAX servono solo a test/rete.ts: con il giro da 10 s l'oggetto non resta mai fermo abbastanza da ibernarsi.
+type Env = { STANZA: DurableObjectNamespace<Stanza>; SCALA_TEMPI?: string; GIRO_MS?: string; TENTATIVI_MAX?: string }
 
 // Allegato del socket: sopravvive all'ibernazione. Tiene un'impronta perché una vista intera può superare i 2 KB ammessi.
-type Posto = { id: number; firma: number | null }
+// Con secondo e messaggi conta il ritmo del socket senza scrivere nello storage.
+type Posto = { id: number; firma: number | null; secondo: number; messaggi: number }
 
 // vivo: ultima ora in cui l'oggetto faceva i giri. Null se non deve farne: stanza in sala, senza socket.
 type Salvataggio = { s: Stato; vivo: number | null }
@@ -59,6 +65,31 @@ function chiudi(ws: WebSocket, codice: number, motivo: string) {
   }
 }
 
+// Conta un messaggio nell'allegato del socket e dice se il secondo in corso ha superato il limite.
+function troppiMessaggi(ws: WebSocket, posto: Posto, ora: number): boolean {
+  const secondo = Math.floor(ora / 1000)
+  const messaggi = posto.secondo === secondo ? posto.messaggi + 1 : 1
+  ws.serializeAttachment({ ...posto, secondo, messaggi } satisfies Posto)
+  return messaggi > MESSAGGI_AL_SECONDO
+}
+
+// Tetto per IP sui tentativi, prima di svegliare l'oggetto. È largo perché i telefoni di una festa escono tutti dallo stesso IP:
+// dopo un calo di rete 20 telefoni che riprovano per un minuto, con l'attesa di connessione.ts, fanno meno di 400 tentativi.
+// Chi lo supera riceve un 429, non un rifiuto: il telefono lo vive come un socket caduto e riprova da solo.
+// Il conteggio sta nella memoria del Worker: ogni copia conta per sé e un riavvio lo azzera. È un freno, non una barriera.
+const tentativi = new Map<string, number>()
+let inizioFinestra = 0
+
+function troppiTentativi(ip: string, ora: number, massimo: number): boolean {
+  if (ora - inizioFinestra >= FINESTRA_TENTATIVI_MS) {
+    tentativi.clear()
+    inizioFinestra = ora
+  }
+  const fatti = (tentativi.get(ip) ?? 0) + 1
+  tentativi.set(ip, fatti)
+  return fatti > massimo
+}
+
 export class Stanza extends DurableObject<Env> {
   private giro: number
 
@@ -71,7 +102,8 @@ export class Stanza extends DurableObject<Env> {
   }
 
   // Ogni evento parte da qui. Nulla resta in memoria tra un evento e l'altro: ibernarsi non può perdere niente.
-  private carica(ora: number): Stato | undefined {
+  // scaduto: il tempo trascorso ha già cambiato lo stato, che va salvato anche se l'evento in sé non cambia nulla.
+  private carica(ora: number): { s: Stato; scaduto: boolean } | undefined {
     const salvato = this.ctx.storage.kv.get<Salvataggio>(CHIAVE)
     if (!salvato) return undefined
     const { s, vivo } = salvato
@@ -86,11 +118,10 @@ export class Stanza extends DurableObject<Env> {
       if (pong) segnale(s, (ws.deserializeAttachment() as Posto).id, pong.getTime())
     }
 
-    scadi(s, ora)
-    return s
+    return { s, scaduto: scadi(s, ora) }
   }
 
-  // Ogni evento finisce qui: salva, avvisa i telefoni, arma la sveglia. Una stanza vuota o muta da 6 ore sparisce.
+  // Ogni evento che cambia qualcosa finisce qui: salva, avvisa i telefoni, arma la sveglia. Una stanza vuota o muta da 6 ore sparisce.
   private async concludi(s: Stato, ora: number) {
     const ultimoSegnale = Math.max(0, ...s.giocatori.map(g => g.visto))
     if (ora - ultimoSegnale >= SILENZIO_MS) {
@@ -125,7 +156,7 @@ export class Stanza extends DurableObject<Env> {
       if (firma === posto.firma) continue
       try {
         ws.send(JSON.stringify({ v }))
-        ws.serializeAttachment({ id: posto.id, firma })
+        ws.serializeAttachment({ ...posto, firma } satisfies Posto)
       } catch {
         // socket in chiusura: un telefono perso non deve fermare gli altri
       }
@@ -139,7 +170,7 @@ export class Stanza extends DurableObject<Env> {
     const crea = url.searchParams.get('crea') === '1'
 
     const ora = Date.now()
-    let s = this.carica(ora)
+    let s = this.carica(ora)?.s
     // Chi ha già un posto e ripete crea=1 sta solo rientrando nella propria stanza.
     if (s && crea && !(token && s.giocatori.some(g => g.token === token))) return rifiuta('codice-occupato')
     if (!s && !crea) return rifiuta('stanza-inesistente')
@@ -159,21 +190,26 @@ export class Stanza extends DurableObject<Env> {
 
     const { 0: telefono, 1: server } = new WebSocketPair()
     this.ctx.acceptWebSocket(server)
-    server.serializeAttachment({ id: ingresso.id, firma: null } satisfies Posto)
+    server.serializeAttachment({ id: ingresso.id, firma: null, secondo: 0, messaggi: 0 } satisfies Posto)
     await this.concludi(s, ora)
     return new Response(null, { status: 101, webSocket: telefono })
   }
 
   async webSocketMessage(ws: WebSocket, messaggio: string | ArrayBuffer) {
     try {
+      if (ws.readyState !== WebSocket.OPEN) return // messaggi rimasti in coda dopo la chiusura
       const ora = Date.now()
-      const s = this.carica(ora)
-      if (!s) return
-      const { id } = ws.deserializeAttachment() as Posto
-      segnale(s, id, ora)
+      const posto = ws.deserializeAttachment() as Posto
+      if (troppiMessaggi(ws, posto, ora)) return chiudi(ws, TROPPI_MESSAGGI, 'troppi-messaggi')
+      const caricata = this.carica(ora)
+      if (!caricata) return
+      const { s, scaduto } = caricata
+      segnale(s, posto.id, ora)
       const azione = leggi(messaggio)
-      if (azione) applica(s, id, azione, ora)
-      await this.concludi(s, ora)
+      const mossa = azione ? applica(s, posto.id, azione, ora) : false
+      // Un messaggio che non cambia nulla non scrive nello storage, così non può consumarne la quota.
+      // Le presenze non si perdono: il visto si riprende dai pong a ogni carica e il giro delle presenze salva comunque.
+      if (scaduto || mossa) await this.concludi(s, ora)
     } catch (errore) {
       // Si scarta il messaggio e l'oggetto resta in piedi: il prossimo evento riparte dall'ultimo stato salvato.
       console.error('messaggio scartato', errore)
@@ -189,8 +225,8 @@ export class Stanza extends DurableObject<Env> {
 
   async alarm() {
     const ora = Date.now()
-    const s = this.carica(ora)
-    if (s) await this.concludi(s, ora)
+    const caricata = this.carica(ora)
+    if (caricata) await this.concludi(caricata.s, ora)
   }
 }
 
@@ -199,6 +235,8 @@ export default {
     const trovato = new URL(req.url).pathname.match(/^\/stanza\/([^/]*)$/)
     if (!trovato || req.headers.get('Upgrade')?.toLowerCase() !== 'websocket') return new Response('Sala Sospetti: server attivo')
     if (!codiceValido(trovato[1])) return rifiuta('codice-non-valido')
+    const ip = req.headers.get('CF-Connecting-IP') ?? ''
+    if (troppiTentativi(ip, Date.now(), Number(env.TENTATIVI_MAX) || TENTATIVI_MAX)) return new Response('Troppi tentativi', { status: 429 })
     return env.STANZA.get(env.STANZA.idFromName(trovato[1]), { locationHint: 'weur' }).fetch(req)
   },
 }

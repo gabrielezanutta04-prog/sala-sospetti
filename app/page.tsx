@@ -32,7 +32,9 @@ function testoErrore(motivo: Errore): string {
     case 'tolto':
       return 'L’host ti ha tolto dalla stanza.'
     case 'partita-in-corso':
-      return 'Partita già iniziata: aspetta che finisca, poi premi di nuovo Entra.'
+      return 'Partita già iniziata. Se stavi giocando, scrivi lo stesso nome di prima e premi Entra. Altrimenti aspetta che finisca e premi di nuovo Entra.'
+    case 'nome-usato':
+      return 'Questo nome è già usato in questa stanza. Se sei tu da un altro telefono o browser, chiudilo e riprova tra 30 secondi. Altrimenti scrivi un nome diverso, per esempio con l’iniziale del cognome.'
     default:
       return TESTI_RIFIUTO[motivo]
   }
@@ -41,6 +43,7 @@ function testoErrore(motivo: Errore): string {
 export default function Pagina() {
   const [ingresso, setIngresso] = useState<Ingresso | null>(null)
   const [invito, setInvito] = useState('')
+  const [codiceProvato, setCodiceProvato] = useState('')
   const [nomeIniziale, setNomeIniziale] = useState('')
   const [messaggio, setMessaggio] = useState<string | null>(null)
   const [avviso, setAvviso] = useState<{ testo: string; n: number } | null>(null)
@@ -48,20 +51,37 @@ export default function Pagina() {
 
   const avvisa = useCallback((testo: string) => setAvviso(a => ({ testo, n: (a?.n ?? 0) + 1 })), [])
 
-  function lasciaStanza() {
-    dimenticaStanza()
+  function tornaAllaHome() {
     aggiornaIndirizzo(null)
     setInvito('')
+    setCodiceProvato('')
     setIngresso(null)
   }
 
+  // In memoria c'è la stanza della partita in corso: restare fuori da un'altra stanza non deve toccarla.
+  function dimenticaQuesta() {
+    if ((vista?.codice ?? ingresso?.codice) === stanzaSalvata()) dimenticaStanza()
+  }
+
+  function annulla() {
+    dimenticaQuesta()
+    tornaAllaHome()
+  }
+
   function finisce(motivo: Fine) {
-    if (motivo === 'uscito') return lasciaStanza()
-    dimenticaStanza()
+    if (motivo === 'uscito') {
+      dimenticaStanza()
+      return tornaAllaHome()
+    }
+    dimenticaQuesta()
+    if (motivo === 'uscito-altrove') return tornaAllaHome()
     // Chi resta fuori per ora riprova dallo stesso link: l'indirizzo sparisce solo se quella stanza non è più per lui.
     if (motivo !== 'partita-in-corso' && motivo !== 'nome-usato' && motivo !== 'stanza-piena') aggiornaIndirizzo(null)
     // Una stanza salvata che non esiste più non è un errore di chi apre il sito: non ha scritto nessun codice.
-    setMessaggio(ingresso?.rientro && motivo === 'stanza-inesistente' ? null : testoErrore(motivo))
+    const sparita = ingresso?.rientro && motivo === 'stanza-inesistente'
+    setMessaggio(sparita ? null : testoErrore(motivo))
+    // Il codice resta nel campo, altrimenti i messaggi che dicono di controllarlo o di premere di nuovo Entra sarebbero falsi.
+    setCodiceProvato(!ingresso || ingresso.crea || sparita || motivo === 'tolto' ? '' : ingresso.codice)
     setIngresso(null)
   }
 
@@ -78,6 +98,7 @@ export default function Pagina() {
     if (miaStanza && (!invitato || invitato === miaStanza)) setIngresso({ codice: miaStanza, nome, crea: false, rientro: true })
     else setInvito(invitato)
     delete document.documentElement.dataset.rientro
+    delete document.documentElement.dataset.attesa
   }, [])
 
   useEffect(() => {
@@ -128,9 +149,9 @@ export default function Pagina() {
       ) : vista ? (
         <Gioco key={vista.codice} v={vista} rete={rete} comanda={comanda} adesso={adesso} esci={esci} avvisa={avvisa} riprova={riprova} />
       ) : ingresso ? (
-        <Collegamento annulla={lasciaStanza} />
+        <Collegamento annulla={annulla} />
       ) : (
-        <Home key={`${invito}|${nomeIniziale}`} invito={invito} nomeIniziale={nomeIniziale} messaggio={messaggio} entra={entra} />
+        <Home invito={invito} codiceProvato={codiceProvato} nomeIniziale={nomeIniziale} messaggio={messaggio} entra={entra} />
       )}
       <div className="avvisi" aria-live="polite">
         {avviso && (

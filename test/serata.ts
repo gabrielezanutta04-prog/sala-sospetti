@@ -967,6 +967,30 @@ function s8() {
   rifiuto('', 'nome-vuoto')
   rifiuto('   ', 'nome-vuoto')
 
+  // Nomi che non si vedono: per Unicode non sono spazi, ma a schermo resterebbe un giocatore senza nome.
+  for (const vuoto of ['⠀⠀', 'ㅤ', 'ᅟᅠﾠ', '​‍', '️', '‮', '\u{E0041}', 'ㅤ ⠀\n​']) rifiuto(vuoto, 'nome-vuoto')
+  rifiuto('​​Anna', 'nome-usato')
+  rifiuto('An⠀naㅤ', 'nome-usato')
+  rifiuto('Annа', 'nome-usato') // a cirillica
+  rifiuto('Mаrtа', 'nome-usato')
+  rifiuto('МАRTА', 'nome-usato') // M e A maiuscole cirilliche
+
+  const mostrato = (nome: string) => {
+    const t = nuovoTelefono(b)
+    t.collega(nome)
+    return vedi(b, t).io
+  }
+  vero(mostrato('‮gnip').nome === 'gnip', 'caratteri di direzione nel nome mostrato')
+  const conZero = mostrato('​x')
+  vero(conZero.nome === 'x' && conZero.iniziale === 'X', 'iniziale invisibile')
+  const riempito = mostrato('ㅤ⠀y‍z​')
+  vero(riempito.nome === 'yz' && riempito.iniziale === 'Y', 'riempitivi nel nome mostrato')
+  // Le emoji composte restano intere: U+200D, i selettori e i tag fanno parte del disegno.
+  for (const emoji of ['👩‍💻', '🧑🏻‍💻', '🏳️‍🌈', '❤️‍🔥', '🏃‍♂️', '👍🏽', '🇮🇹', '🏴󠁧󠁢󠁥󠁮󠁧󠁿']) {
+    const io = mostrato(emoji)
+    vero(io.nome === emoji, `emoji ${emoji} alterata: ${JSON.stringify(io.nome)}`)
+  }
+
   const volpe = nuovoTelefono(b)
   volpe.collega('🦊 Volpe')
   vero(vedi(b, volpe).io.iniziale === '🦊', 'iniziale spezzata su un\'emoji')

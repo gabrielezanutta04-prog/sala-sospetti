@@ -64,7 +64,7 @@
     --linea-forte: #b6c1d8;
     --sagoma: #c3cde0;
     --testo: #121a2d;
-    --tenue: #5b6782;
+    --tenue: #566280;
     --primario: #2d5fe3;
     --primario-ink: #ffffff;
     --verde: #116b33;
@@ -433,11 +433,13 @@ ul {
   color: var(--testo);
 }
 
-.errore {
+.errore,
+.scheda .errore {
   padding: 10px 12px;
   border: 1px solid var(--rosso-bordo);
   border-radius: 12px;
   background: var(--rosso-fondo);
+  color: var(--testo);
   font-size: 14.5px;
 }
 
@@ -483,6 +485,12 @@ ul {
   cursor: pointer;
   touch-action: manipulation;
   transition: transform 0.08s, border-color 0.15s, background 0.15s;
+}
+
+a.tasto {
+  display: grid;
+  place-items: center;
+  text-decoration: none;
 }
 
 .tasto:active:not(:disabled) {
@@ -589,6 +597,18 @@ ul {
 /* ---- Home ---- */
 html[data-rientro] .home {
   visibility: hidden;
+}
+
+/* Prima dell'aggancio di React i tasti non risponderebbero: si vedono spenti. I campi restano buoni, il testo scritto non si perde */
+html[data-attesa] .home .tasto {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+/* Dal link d'invito si entra e basta: Crea stanza non è la strada, e prima dell'aggancio sarebbe il primo tasto a vista */
+html[data-attesa='invito'] .home .scheda:first-of-type,
+html[data-attesa='invito'] .home .separatore {
+  display: none;
 }
 
 .home {
@@ -745,23 +765,16 @@ html[data-rientro] .home {
   padding-top: calc(14px + var(--su));
 }
 
+/* Solo opacity: si anima fuori dal filo principale, e la Sala può restare aperta a lungo */
 .punti::after {
-  content: '';
-  animation: punti 1.4s steps(4, end) infinite;
+  content: '...';
+  display: inline-block;
+  animation: punti 1.4s ease-in-out infinite;
 }
 
 @keyframes punti {
-  0% {
-    content: '';
-  }
-  25% {
-    content: '.';
-  }
   50% {
-    content: '..';
-  }
-  75% {
-    content: '...';
+    opacity: 0.2;
   }
 }
 
@@ -841,7 +854,7 @@ html[data-rientro] .home {
 .cella .tag.tu {
   position: absolute;
   left: 13px;
-  bottom: 3px;
+  top: 31px;
   padding: 0 4px;
   border-color: var(--pannello-2);
   background: var(--primario);
@@ -859,6 +872,11 @@ html[data-rientro] .home {
 
 .cella.eliminata .cella-nome {
   text-decoration: line-through;
+}
+
+/* In alto, così spunta e «Tu» restano attaccati all'avatar anche quando il nome occupa più righe */
+.cella .avatar {
+  align-self: flex-start;
 }
 
 .avatar {
@@ -1181,6 +1199,7 @@ html[data-rientro] .home {
 
 .azione {
   display: grid;
+  align-content: start;
   justify-items: center;
   gap: 4px;
   min-width: 0;
@@ -1414,7 +1433,8 @@ html[data-rientro] .home {
 .fuori {
   flex: none;
   max-height: 2.8em;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .piede-voto {
@@ -1461,6 +1481,7 @@ html[data-rientro] .home {
 /* ---- Esito ---- */
 .risultato {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 6px;
   justify-items: center;
   padding: 16px 14px;
@@ -1469,6 +1490,10 @@ html[data-rientro] .home {
   background: var(--pannello-2);
   text-align: center;
   animation: entra 0.3s ease both;
+}
+
+.risultato h2 {
+  overflow-wrap: anywhere;
 }
 
 .corpo.esito {
@@ -1506,6 +1531,7 @@ html[data-rientro] .home {
 
 .dialogo {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 12px;
   width: 100%;
@@ -1517,6 +1543,10 @@ html[data-rientro] .home {
   background: var(--pannello);
   box-shadow: var(--ombra);
   animation: comparsa 0.2s ease both;
+}
+
+.dialogo h2 {
+  overflow-wrap: anywhere;
 }
 
 .dialogo p {
@@ -1644,6 +1674,11 @@ html[data-rientro] .home {
   .ba-chiave {
     display: none;
   }
+
+  /* Il proprio nome ridotto a una lettera sembrerebbe un errore: meglio la sola scritta Morto */
+  .ba-nome:has(+ .tag.morto) {
+    display: none;
+  }
 }
 
 /* ---- Telefono in orizzontale: Report ed Emergency accanto alla task ---- */
@@ -1693,6 +1728,16 @@ html[data-rientro] .home {
 
   .griglia {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  /* In orizzontale la lista da sola resterebbe alta pochi pixel: scorre tutto il corpo, i tasti restano nel piede */
+  .corpo.riunione {
+    overflow-y: auto;
+  }
+
+  .corpo.riunione .griglia.scorre {
+    flex: none;
+    overflow: visible;
   }
 
   .corpo.riunione .nota:not(.fuori),

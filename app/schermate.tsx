@@ -3,7 +3,7 @@
 // Vincolo: civile e assassino vedono lo stesso identico schermo finché l'assassino non apre il riquadro Uccidi.
 // Quindi fuori da Ruolo nessun nodo dipende dal ruolo, e tutto ciò che cambia da un giocatore all'altro
 // (nome proprio, task, timer, «Tu», tasti di voto) vive dentro un elemento con l'attributo data-privato.
-import { createContext, useContext, useEffect, useReducer, useRef, useState } from 'react'
+import { createContext, useContext, useEffect, useLayoutEffect, useReducer, useRef, useState } from 'react'
 import type { ButtonHTMLAttributes, CSSProperties, MouseEvent, PointerEvent, ReactNode } from 'react'
 import {
   ASSASSINI_SCEGLIBILI,
@@ -166,13 +166,13 @@ function ListaRegole() {
         viene eliminato non dice chi è stato e preme <b>Sono morto</b>: non vota più, ma può continuare a fare le task.
       </li>
       <li>
-        Gli assassini aprono il riquadro <b>Uccidi</b> tenendo premuta la barra in alto: per gli altri il gesto non fa nulla. Si elimina solo
-        quando il riquadro dice «pronto», poi si preme Uccidi. L&apos;attesa è di {minuti(KILL_CD)} minuti all&apos;inizio, dopo ogni
-        eliminazione e dopo ogni riunione.
+        Gli assassini aprono il riquadro <b>Uccidi</b> tenendo premuta per un secondo la barra col codice stanza, non quella verde: per gli
+        altri il gesto non fa nulla. Si elimina solo quando il riquadro dice «pronto», poi si preme Uccidi. L&apos;attesa è di{' '}
+        {minuti(KILL_CD)} minuti all&apos;inizio, dopo ogni eliminazione e dopo ogni riunione.
       </li>
       <li>
         Hai trovato un morto? <b>Report</b>. Sospetti qualcuno? <b>Emergency</b>, una ogni {minuti(COOLDOWN)} minuti. Si vota e chi prende più
-        voti è fuori; con la parità non esce nessuno.
+        voti è fuori. Non esce nessuno se c&apos;è parità, anche con i salti, o se i salti sono di più.
       </li>
       <li>I civili vincono con la barra piena o senza più assassini. Gli assassini vincono se pareggiano i civili.</li>
     </ul>
@@ -217,19 +217,51 @@ function Confronto() {
   )
 }
 
+// Un testo incollato può contenere più del codice: quello di Condividi e i link lo hanno in fondo.
+function pulisciCodice(testo: string) {
+  const parole = testo.toUpperCase().split(/[^A-Z0-9]+/).filter(Boolean)
+  const inFondo = parole.length > 1 ? parole.filter(codiceValido).at(-1) : undefined
+  return inFondo ?? parole.join('').slice(0, LUNGHEZZA_CODICE)
+}
+
 type PropsHome = {
   invito: string
+  codiceProvato: string
   nomeIniziale: string
   messaggio: string | null
   entra: (nome: string, codice: string | null) => void
 }
 
-export function Home({ invito, nomeIniziale, messaggio, entra }: PropsHome) {
+export function Home({ invito, codiceProvato, nomeIniziale, messaggio, entra }: PropsHome) {
   const [nome, setNome] = useState(nomeIniziale)
-  const [codice, setCodice] = useState(invito)
+  const [codice, setCodice] = useState(codiceProvato || invito)
   const [errore, setErrore] = useState<string | null>(null)
+  const [erroreCodice, setErroreCodice] = useState<string | null>(null)
   const campoNome = useRef<HTMLInputElement>(null)
   const campoCodice = useRef<HTMLInputElement>(null)
+  const avvisoCodice = useRef<HTMLParagraphElement>(null)
+
+  // Con la rete lenta si scrive prima che arrivi il JavaScript: quel testo sta solo nel campo e React non lo conosce.
+  // Va ripreso prima che Pagina legga l'indirizzo e la memoria, altrimenti il primo aggiornamento lo cancella.
+  useLayoutEffect(() => {
+    const nomeScritto = campoNome.current?.value
+    const codiceScritto = campoCodice.current?.value
+    if (nomeScritto) setNome(nomeScritto)
+    if (codiceScritto) setCodice(pulisciCodice(codiceScritto))
+  }, [])
+
+  // Nome salvato e invito arrivano appena dopo l'aggancio: non sostituiscono ciò che la persona ha già scritto.
+  useEffect(() => {
+    if (nomeIniziale) setNome(attuale => attuale || nomeIniziale)
+  }, [nomeIniziale])
+
+  useEffect(() => {
+    if (invito) setCodice(attuale => (codiceValido(attuale) ? attuale : invito))
+  }, [invito])
+
+  useEffect(() => {
+    if (erroreCodice) avvisoCodice.current?.scrollIntoView({ block: 'nearest' })
+  }, [erroreCodice])
 
   // Chi arriva dal QR ha già il codice: resta solo da scrivere il nome.
   useEffect(() => {
@@ -238,6 +270,7 @@ export function Home({ invito, nomeIniziale, messaggio, entra }: PropsHome) {
 
   function nomeOk() {
     if (nome.trim()) return true
+    setErroreCodice(null)
     setErrore('Scrivi prima il tuo nome')
     campoNome.current?.focus()
     return false
@@ -250,7 +283,8 @@ export function Home({ invito, nomeIniziale, messaggio, entra }: PropsHome) {
   function unisciti() {
     if (!nomeOk()) return
     if (codiceValido(codice)) return entra(nome.trim(), codice)
-    setErrore(codice.length < LUNGHEZZA_CODICE ? `Inserisci il codice della stanza (${LUNGHEZZA_CODICE} caratteri)` : TESTO_CODICE_ERRATO)
+    setErrore(null)
+    setErroreCodice(codice.length < LUNGHEZZA_CODICE ? `Inserisci il codice della stanza (${LUNGHEZZA_CODICE} caratteri)` : TESTO_CODICE_ERRATO)
     campoCodice.current?.focus()
   }
 
@@ -280,7 +314,6 @@ export function Home({ invito, nomeIniziale, messaggio, entra }: PropsHome) {
           className="input codice"
           type="text"
           aria-label="Codice stanza"
-          maxLength={LUNGHEZZA_CODICE}
           placeholder="ABCDE"
           autoCapitalize="characters"
           autoComplete="off"
@@ -290,7 +323,8 @@ export function Home({ invito, nomeIniziale, messaggio, entra }: PropsHome) {
           value={codice}
           onChange={e => {
             setErrore(null)
-            setCodice(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))
+            setErroreCodice(null)
+            setCodice(pulisciCodice(e.target.value))
           }}
           onFocus={e => {
             const campo = e.currentTarget
@@ -304,6 +338,12 @@ export function Home({ invito, nomeIniziale, messaggio, entra }: PropsHome) {
           Entra
         </button>
       </div>
+      {/* Qui e non in cima: con la tastiera aperta la cima della pagina è fuori schermo */}
+      {erroreCodice && (
+        <p ref={avvisoCodice} className="errore" role="alert">
+          {erroreCodice}
+        </p>
+      )}
     </section>
   )
 
@@ -400,7 +440,7 @@ export function Uscita() {
 // Pressione lunga: stesso listener e stessi tempi per tutti. Che il gesto faccia qualcosa lo decide solo chi lo riceve.
 function usePressioneLunga(alGesto: () => void) {
   const barra = useRef<HTMLElement>(null)
-  const pressione = useRef<{ x: number; y: number; timer: ReturnType<typeof setTimeout> } | null>(null)
+  const pressione = useRef<{ id: number; x: number; y: number; timer: ReturnType<typeof setTimeout> } | null>(null)
   const gesto = useRef(alGesto)
 
   useEffect(() => {
@@ -424,24 +464,28 @@ function usePressioneLunga(alGesto: () => void) {
     pressione.current = null
   }
 
+  // Conta solo il dito che ha iniziato la pressione: con il telefono in mano un altro dito può già toccare lo schermo.
+  function finisce(e: PointerEvent<HTMLElement>) {
+    if (pressione.current?.id === e.pointerId) annulla()
+  }
+
   return {
     ref: barra,
     onPointerDown(e: PointerEvent<HTMLElement>) {
-      if (!e.isPrimary || (e.target as Element).closest('button')) return
-      annulla()
+      if (pressione.current || (e.target as Element).closest('button')) return
       const timer = setTimeout(() => {
         pressione.current = null
         gesto.current()
       }, LONG_PRESS_MS)
-      pressione.current = { x: e.clientX, y: e.clientY, timer }
+      pressione.current = { id: e.pointerId, x: e.clientX, y: e.clientY, timer }
     },
     onPointerMove(e: PointerEvent<HTMLElement>) {
       const p = pressione.current
-      if (p && Math.hypot(e.clientX - p.x, e.clientY - p.y) > LONG_PRESS_PX) annulla()
+      if (p?.id === e.pointerId && Math.hypot(e.clientX - p.x, e.clientY - p.y) > LONG_PRESS_PX) annulla()
     },
-    onPointerUp: annulla,
-    onPointerCancel: annulla,
-    onPointerLeave: annulla,
+    onPointerUp: finisce,
+    onPointerCancel: finisce,
+    onPointerLeave: finisce,
     onContextMenu(e: MouseEvent<HTMLElement>) {
       e.preventDefault()
     },
@@ -623,7 +667,7 @@ function Impostazioni({ v, comanda }: { v: VistaSala; comanda: Comanda }) {
   const scelte = Array.from({ length: ASSASSINI_SCEGLIBILI }, (_, i) => i + 1)
   const barra = (
     <>
-      La barra si riempie dopo <b>{v.traguardoPrevisto}</b> task fatte in tutto.
+      La barra si riempie dopo <b>{v.traguardoPrevisto}</b> {v.traguardoPrevisto === 1 ? 'task fatta' : 'task fatte'} in tutto.
     </>
   )
 
@@ -758,9 +802,10 @@ function Sala({ v, comanda, avvisa, togli, chiediStart }: PropsSala) {
 }
 
 // ---- Rivelazione: unica schermata in cui il ruolo si vede ----
-function Ruolo({ v, comanda }: { v: VistaRuolo; comanda: Comanda }) {
+function Ruolo({ v, comanda, avvisa }: { v: VistaRuolo; comanda: Comanda; avvisa: Avvisa }) {
   const assassino = v.ruolo === 'assassino'
   const pronto = useDopo(BLOCCO_RUOLO_MS)
+  const conferma = useConferma(v.schermata, () => {}, () => avvisa(TESTO_PERSO)) // se arriva, questa schermata sparisce
 
   // Chi legge il ruolo tiene ferma la riunione senza saperlo: segnale e avviso, come per chi è già in partita.
   useEffect(() => {
@@ -782,8 +827,8 @@ function Ruolo({ v, comanda }: { v: VistaRuolo; comanda: Comanda }) {
               )}
               <p>Elimina i civili di persona e di nascosto, senza farti scoprire. Chi elimini premerà «Sono morto».</p>
               <p>
-                <b>Tieni premuta la barra in alto</b> (dove c&apos;è il codice stanza) per aprire o chiudere il riquadro Uccidi: per gli
-                altri quel gesto non fa nulla.
+                Dopo Ho capito, <b>tieni premuta per un secondo la barra in alto con il codice stanza</b>: si apre il riquadro Uccidi. Per
+                gli altri quel gesto non fa nulla.
               </p>
               <p>
                 <b>Elimina solo quando il riquadro dice «pronto»</b>, poi premi Uccidi: all&apos;inizio, dopo ogni eliminazione e dopo ogni
@@ -818,7 +863,14 @@ function Ruolo({ v, comanda }: { v: VistaRuolo; comanda: Comanda }) {
             Hanno aperto una riunione: premi Ho capito e raggiungi gli altri.
           </p>
         )}
-        <Tasto className="tasto primario grande" disabled={!pronto} onClick={() => comanda({ a: 'ruoloVisto' })}>
+        <Tasto
+          className="tasto primario grande"
+          disabled={!pronto}
+          onClick={() => {
+            comanda({ a: 'ruoloVisto' })
+            conferma()
+          }}
+        >
           Ho capito
         </Tasto>
       </footer>
@@ -852,8 +904,8 @@ function RiquadroUccidi({ uccidiDa, ora, comanda }: { uccidiDa: number; ora: num
       </Tasto>
       {perso && <p className="uccidi-perso">{TESTO_PERSO}</p>}
       <p className="nota uccidi-spiega">
-        Elimina solo quando è pronto, poi premilo: riparte l&apos;attesa di {minuti(KILL_CD)} minuti. Tieni premuta la barra in alto per
-        nasconderlo.
+        Elimina solo quando è pronto, poi premilo: riparte l&apos;attesa di {minuti(KILL_CD)} minuti. Tieni premuta la barra col codice
+        stanza per nasconderlo.
       </p>
     </section>
   )
@@ -863,12 +915,16 @@ type PropsPartita = {
   v: VistaPartita
   ora: number
   comanda: Comanda
+  avvisa: Avvisa
   sonoMorto: () => void
   uccidiVisibile: boolean
 }
 
-function Partita({ v, ora, comanda, sonoMorto, uccidiVisibile }: PropsPartita) {
+function Partita({ v, ora, comanda, avvisa, sonoMorto, uccidiVisibile }: PropsPartita) {
   const morto = !v.io.vivo
+  // Una riunione aperta cambia la fase e toglie di mezzo questa schermata. Per Fatto vale solo taskDa: la barra cresce anche con gli altri.
+  const confermaRiunione = useConferma(v.f, () => {}, () => avvisa(TESTO_PERSO))
+  const confermaTask = useConferma(v.taskDa, () => {}, () => avvisa(TESTO_PERSO))
   const attesaEmergency = v.emergencyDa - ora
   const inAttesa = v.taskFatta !== null && ora < v.taskDa
   const testoTask = inAttesa ? v.taskFatta : v.task
@@ -883,7 +939,15 @@ function Partita({ v, ora, comanda, sonoMorto, uccidiVisibile }: PropsPartita) {
         <div className="partita">
           <div className="azioni">
             <div className="azione">
-              <Tasto className="tondo report" aria-label="Report" disabled={morto} onClick={() => comanda({ a: 'report' })}>
+              <Tasto
+                className="tondo report"
+                aria-label="Report"
+                disabled={morto}
+                onClick={() => {
+                  comanda({ a: 'report' })
+                  confermaRiunione()
+                }}
+              >
                 <IconaReport />
               </Tasto>
               <span className="az-nome">Report</span>
@@ -895,7 +959,10 @@ function Partita({ v, ora, comanda, sonoMorto, uccidiVisibile }: PropsPartita) {
                 className="tondo emergency"
                 aria-label="Emergency meeting"
                 disabled={morto || attesaEmergency > 0}
-                onClick={() => comanda({ a: 'emergency' })}
+                onClick={() => {
+                  comanda({ a: 'emergency' })
+                  confermaRiunione()
+                }}
               >
                 <IconaCampana />
               </Tasto>
@@ -925,7 +992,14 @@ function Partita({ v, ora, comanda, sonoMorto, uccidiVisibile }: PropsPartita) {
                     <span className="mono">{mmss(v.taskDa - ora)}</span>
                   </div>
                 ) : (
-                  <Tasto className="spunta" aria-label="Segna la task come fatta" onClick={() => comanda({ a: 'spunta' })}>
+                  <Tasto
+                    className="spunta"
+                    aria-label="Segna la task come fatta"
+                    onClick={() => {
+                      comanda({ a: 'spunta' })
+                      confermaTask()
+                    }}
+                  >
                     Fatto
                   </Tasto>
                 )}
@@ -946,11 +1020,12 @@ function Partita({ v, ora, comanda, sonoMorto, uccidiVisibile }: PropsPartita) {
 }
 
 // ---- Riunione: il tocco sceglie l'intera cella, il tasto fisso in basso conferma ----
-type PropsRiunione = { v: VistaRiunione; comanda: Comanda; sonoMorto: () => void; togli: (id: number) => void }
+type PropsRiunione = { v: VistaRiunione; comanda: Comanda; avvisa: Avvisa; sonoMorto: () => void; togli: (id: number) => void }
 
-function Riunione({ v, comanda, sonoMorto, togli }: PropsRiunione) {
+function Riunione({ v, comanda, avvisa, sonoMorto, togli }: PropsRiunione) {
   const [scelta, setScelta] = useState<Voto | null>(null)
   const pronto = useDopo(BLOCCO_RIUNIONE_MS)
+  const conferma = useConferma(v.mioVoto, () => {}, () => avvisa(TESTO_PERSO))
   const posso = v.io.vivo && v.mioVoto === null
   const scelto = v.giocatori.find(g => g.id === scelta && g.id !== v.io.id)
   const salto = scelta === 'salta'
@@ -1018,7 +1093,7 @@ function Riunione({ v, comanda, sonoMorto, togli }: PropsRiunione) {
       </main>
       <footer className="piede">
         <div data-privato className="piede-voto">
-          {v.rivota && posso && <p className="avviso-fisso caldo">Il giocatore che avevi votato è uscito: vota di nuovo.</p>}
+          {v.rivota && posso && <p className="avviso-fisso caldo">La persona che avevi votato non è più in gioco: vota di nuovo.</p>}
           {posso && (
             <>
               <p className="scelta">
@@ -1040,6 +1115,7 @@ function Riunione({ v, comanda, sonoMorto, togli }: PropsRiunione) {
                   onClick={() => {
                     if (salto) comanda({ a: 'vota', x: 'salta' })
                     else if (scelto) comanda({ a: 'vota', x: scelto.id })
+                    conferma()
                   }}
                 >
                   Conferma
@@ -1048,7 +1124,11 @@ function Riunione({ v, comanda, sonoMorto, togli }: PropsRiunione) {
             </>
           )}
           {!posso && v.io.vivo && (
-            <p className="avviso-fisso">{v.mioVoto === 'salta' ? 'Hai votato di saltare.' : `Hai votato ${votato?.nome ?? ''}.`} In attesa degli altri.</p>
+            <p className="avviso-fisso">
+              {v.mioVoto === 'salta' ? 'Hai votato di saltare.' : `Hai votato ${votato?.nome ?? ''}.`}{' '}
+              {/* Chi rivota resta contato: il conto pieno a riunione aperta vuol dire proprio questo */}
+              {v.votati === v.totale ? 'Qualcuno deve votare di nuovo: controllate tutti il telefono.' : 'In attesa degli altri.'}
+            </p>
           )}
           {!v.io.vivo && <p className="avviso-fisso">Sei fuori dalle votazioni: guardi senza votare.</p>}
         </div>
@@ -1061,6 +1141,7 @@ function Riunione({ v, comanda, sonoMorto, togli }: PropsRiunione) {
 function Esito({ v, ora }: { v: VistaEsito; ora: number }) {
   // Chi ha preso voti per primo: in caso di parità i due nomi devono stare a vista.
   const votanti = [...v.votanti].sort((a, b) => b.voti - a.voti)
+  const pariConISalti = v.parita && v.salti === votanti[0]?.voti
 
   return (
     <main className="corpo esito entrata">
@@ -1074,7 +1155,7 @@ function Esito({ v, ora }: { v: VistaEsito; ora: number }) {
         ) : (
           <>
             <h2>Nessuno è stato eliminato</h2>
-            <p className="nota">{v.parita ? 'Parità di voti.' : 'La maggioranza ha saltato il voto.'}</p>
+            <p className="nota">{pariConISalti ? 'Tanti voti quanti salti: non esce nessuno.' : v.parita ? 'Parità di voti.' : 'I salti sono più dei voti.'}</p>
           </>
         )}
         {v.vincitore === 'civili' && (
@@ -1258,9 +1339,9 @@ export function Gioco({ v, rete, comanda, adesso, esci, avvisa, riprova }: Props
         <BarraVerde v={v} />
 
         {v.schermata === 'sala' && <Sala v={v} comanda={comanda} avvisa={avvisa} togli={chiediTogli} chiediStart={() => chiedi({ tipo: 'start' })} />}
-        {v.schermata === 'ruolo' && <Ruolo v={v} comanda={comanda} />}
-        {v.schermata === 'partita' && <Partita key={v.f} v={v} ora={ora} comanda={comanda} sonoMorto={chiediMorto} uccidiVisibile={uccidiVisibile} />}
-        {v.schermata === 'riunione' && <Riunione key={v.f} v={v} comanda={comanda} sonoMorto={chiediMorto} togli={chiediTogli} />}
+        {v.schermata === 'ruolo' && <Ruolo v={v} comanda={comanda} avvisa={avvisa} />}
+        {v.schermata === 'partita' && <Partita key={v.f} v={v} ora={ora} comanda={comanda} avvisa={avvisa} sonoMorto={chiediMorto} uccidiVisibile={uccidiVisibile} />}
+        {v.schermata === 'riunione' && <Riunione key={v.f} v={v} comanda={comanda} avvisa={avvisa} sonoMorto={chiediMorto} togli={chiediTogli} />}
         {v.schermata === 'esito' && <Esito v={v} ora={ora} />}
         {v.schermata === 'fine' && <Fine v={v} ora={ora} />}
 

@@ -16,6 +16,9 @@ const USCITA_MAX_MS = 5000 // Esci aspetta la chiusura del server: oltre questo 
 const TENTATIVI_CODICE = 8
 const CHIUSO_SOSTITUITO = 4000 // il server chiude così il socket sostituito da uno più recente
 const CHIUSO_USCITO = 4001 // Togli o stanza cancellata: il posto non esiste più
+const RIPRESA_MS = 2000 // dopo una sostituzione si riprova una volta: può essere un socket di questa scheda aperto in ritardo
+const FINESTRA_SOSTITUITO_MS = 30_000 // due sostituzioni entro questo tempo sono un'altra scheda vera
+const SALTO_OROLOGIO_MS = 5000 // un campione più basso di così non è un ritardo: l'orologio del telefono è saltato avanti
 
 const CHIAVE_TOKEN = 'sala-sospetti:token'
 const CHIAVE_NOME = 'sala-sospetti:nome'
@@ -23,7 +26,7 @@ const CHIAVE_STANZA = 'sala-sospetti:stanza'
 
 export type Ingresso = { codice: string; nome: string; crea: boolean; rientro?: boolean } // rientro: nessuno ha scritto un codice
 export type Errore = Rifiuto | 'stanza-inesistente' | 'codice-occupato' | 'codice-non-valido' | 'tolto'
-export type Fine = Errore | 'uscito' // il posto non c'è più: Esci confermato dal server, oppure uno degli errori
+export type Fine = Errore | 'uscito' | 'uscito-altrove' // il posto non c'è più: Esci confermato dal server, Esci da un'altra scheda, oppure uno degli errori
 export type StatoRete = 'ok' | 'persa' | 'altrove'
 
 // Le azioni partono senza contatore di fase: lo aggiunge chi conosce la vista corrente.
@@ -121,6 +124,9 @@ export function useStanza(ingresso: Ingresso | null, alRifiuto: (motivo: Fine) =
     let scartoSocket = -Infinity
     let faseNota: number | null = null // contatore di fase dell'ultima vista
     let esciChiesto = false
+    let ceduto = false // il posto è passato a un altro socket e non è ancora tornato qui
+    let ultimoSostituito = -Infinity
+    let memoriaBuona = false // la stanza si è scritta davvero: senza memoria stanzaSalvata() non dice nulla
     let tempoRiprova: ReturnType<typeof setTimeout> | undefined
     let tempoRisposta: ReturnType<typeof setTimeout> | undefined
     let tempoUscita: ReturnType<typeof setTimeout> | undefined
@@ -176,11 +182,31 @@ export function useStanza(ingresso: Ingresso | null, alRifiuto: (motivo: Fine) =
         if (evento.code === CHIUSO_USCITO && esciChiesto) return smetti('uscito')
         if (evento.code === CHIUSO_USCITO) return smetti(evento.reason === 'stanza-cancellata' ? 'stanza-inesistente' : 'tolto')
         if (evento.code !== CHIUSO_SOSTITUITO) return cade()
-        // Un'altra scheda ha preso il posto: riprovare da soli farebbe rimbalzare le due schede all'infinito.
-        stacca()
-        clearTimeout(tempoRiprova)
-        setRete('altrove')
+        sostituito()
       }
+    }
+
+    // Il posto è passato a un altro socket, che può essere di un'altra scheda o di questa, aperto in ritardo da una ricarica.
+    // Si riprova una volta sola: due schede vere rimbalzano una volta e l'ultima aperta resta, senza rimbalzare all'infinito.
+    // Una scheda nascosta non riprova: la riapre visibilitychange.
+    function sostituito() {
+      stacca()
+      clearTimeout(tempoRiprova)
+      ceduto = true
+      const ora = Date.now()
+      if (ora - ultimoSostituito < FINESTRA_SOSTITUITO_MS || document.visibilityState === 'hidden') {
+        setRete('altrove')
+        return
+      }
+      ultimoSostituito = ora
+      setRete('persa')
+      tempoRiprova = setTimeout(riprendi, RIPRESA_MS)
+    }
+
+    // Se dalla memoria la stanza è sparita, da un'altra scheda si è usciti: riprendere il posto rimetterebbe dentro il giocatore.
+    function riprendi() {
+      if (memoriaBuona && stanzaSalvata() !== codice) smetti('uscito-altrove')
+      else apri()
     }
 
     function ricevi(dato: unknown) {
@@ -210,12 +236,15 @@ export function useStanza(ingresso: Ingresso | null, alRifiuto: (motivo: Fine) =
         annullaAttesa()
       }
       // Una vista rimasta in coda arriva in ritardo: per ogni socket vale il campione con il ritardo minore.
-      scartoSocket = Math.max(scartoSocket, v.ora - Date.now())
+      const campione = v.ora - Date.now()
+      scartoSocket = campione < scartoSocket - SALTO_OROLOGIO_MS ? campione : Math.max(scartoSocket, campione)
       scarto.current = scartoSocket
       crea = false // La stanza ora esiste: una riconnessione con crea=1 verrebbe rifiutata
       tentativi = 0
       faseNota = v.f
+      ceduto = false
       scrivi(CHIAVE_STANZA, v.codice)
+      memoriaBuona = stanzaSalvata() === v.codice
       setVista(v)
       setRete('ok')
       mandaEsci()
@@ -256,7 +285,9 @@ export function useStanza(ingresso: Ingresso | null, alRifiuto: (motivo: Fine) =
         annullaAttesa()
         aspettaRisposta(ATTESA_RITORNO_MS)
       } else if (ws?.readyState !== WebSocket.CONNECTING) {
-        apri()
+        if (!ceduto) return apri()
+        ultimoSostituito = -Infinity // qui si è tornati di proposito: la prossima sostituzione riparte da capo
+        riprendi()
       }
     }
 

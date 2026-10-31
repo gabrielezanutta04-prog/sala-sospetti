@@ -429,8 +429,27 @@ class Telefono {
     await this.cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
   }
 
+  // Come chi regge il telefono: un dito fermo fuori dalla barra, poi la pressione vera con un altro dito.
+  async premiConDitoFermo(ms: number) {
+    const area = await this.pagina.locator('.ba-stanza').boundingBox()
+    assert.ok(area, 'barra in alto non trovata')
+    const fermo = { x: 8, y: 600, id: 0 }
+    const punto = { x: area.x + area.width / 2, y: area.y + area.height / 2, id: 1 }
+    await this.cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [fermo] })
+    await dorme(200)
+    await this.cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [fermo, punto] })
+    await dorme(ms)
+    await this.cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+  }
+
   riquadri() {
     return this.pagina.locator('.uccidi').count()
+  }
+
+  // Un comando perso lascia la schermata com'è e dice di riprovare; quando l'avviso sparisce si può andare avanti.
+  async attendiPerso() {
+    await this.pagina.getByText('Non è arrivato al server').waitFor({ timeout: 6000 })
+    await this.pagina.locator('.avviso').waitFor({ state: 'detached' })
   }
 
   async attendiRiquadri(quanti: number, quando: string) {
@@ -566,6 +585,23 @@ async function ingressi() {
   await host.tocca('Entra')
   const lettere = await host.pagina.locator('.errore').innerText()
   if (!lettere.includes('non è valido')) segnala(`codice con lettere vietate: messaggio «${lettere}»`)
+  await host.pagina.getByLabel('Codice stanza').fill('')
+
+  passo('Codice incollato con spazi, dentro una frase o da un link')
+  for (const incollato of [' BHHBL', 'BH HBL', 'Entra nella stanza BHHBL', 'https://esempio.it/sala/?stanza=BHHBL']) {
+    await host.pagina.getByLabel('Codice stanza').fill(incollato)
+    const letto = await host.pagina.getByLabel('Codice stanza').inputValue()
+    if (letto !== 'BHHBL') segnala(`incollando «${incollato}» il campo mostra «${letto}»`)
+  }
+
+  passo('Con la tastiera aperta l’errore sul codice resta a vista')
+  await host.pagina.setViewportSize({ width: 360, height: 340 })
+  await host.pagina.getByLabel('Codice stanza').fill('AB')
+  await host.tocca('Entra')
+  await dorme(500) // dopo lo scorrimento del campo
+  const fuoriVista = await host.pagina.evaluate(nonAVista, '.errore')
+  if (fuoriVista.length) segnala(`errore sul codice fuori schermo a 360x340: ${fuoriVista.join(', ')}`)
+  await host.pagina.setViewportSize(TELEFONO)
   await host.pagina.getByLabel('Codice stanza').fill('')
 
   passo('Stanza creata, ingressi dal link')
@@ -722,6 +758,10 @@ async function pressioneLunga(A: Telefono, C: Telefono) {
   await A.premi(LONG_PRESS_MS / 2)
   await dorme(LONG_PRESS_MS)
   await A.attendiRiquadri(0, 'tocco breve')
+  await A.premiConDitoFermo(PRESSA_MS)
+  await A.attendiRiquadri(1, 'pressione lunga con un altro dito sullo schermo')
+  await A.premi(PRESSA_MS)
+  await A.attendiRiquadri(0, 'pressione lunga che richiude')
   await A.premi(PRESSA_MS)
   await A.attendiRiquadri(1, 'pressione lunga')
   await A.premi(PRESSA_MS)
@@ -747,15 +787,26 @@ async function pressioneLunga(A: Telefono, C: Telefono) {
 }
 
 async function primaRiunione(A: Telefono, C: Telefono, T: Telefono) {
+  passo('Fatto e Report persi: il telefono lo dice')
+  await C.perdi(true)
+  await C.tocca('Segna la task come fatta')
+  await C.attendiPerso()
+  await C.tocca('Report')
+  await C.attendiPerso()
+  await C.perdi(false)
+  if (bot[0].v?.schermata !== 'partita' || bot[0].v?.barra !== 0) segnala('comandi persi: qualcosa è arrivato al server')
+
   passo('Task spuntate dai telefoni')
   await C.tocca('Segna la task come fatta')
   await C.pagina.locator('.spunta.fatta').waitFor()
   await A.tocca('Segna la task come fatta')
   await A.pagina.locator('.spunta.fatta').waitFor()
-  await Promise.all(telefoni.map(t => t.pagina.getByText('2 / 78').waitFor()))
+  await Promise.all(telefoni.map(t => t.pagina.getByText(`2 / ${bot[0].v?.traguardo}`).waitFor()))
   await confrontaRuoli('task in attesa', A)
   await C.giro('partita-attesa')
   await C.pagina.getByRole('button', { name: 'Segna la task come fatta' }).waitFor({ timeout: 8000 })
+  await dorme(300)
+  if (await C.pagina.locator('.avviso').count()) segnala('Fatto arrivato, ma compare l’avviso di comando perso')
   await confrontaRuoli('nuova task', A)
 
   passo('Report da un bot: il riquadro sparisce')
@@ -789,7 +840,12 @@ async function primaRiunione(A: Telefono, C: Telefono, T: Telefono) {
   if ((await A.pagina.locator('.copri').count()) > 0) segnala('dopo la ricarica chi ha votato può scegliere di nuovo')
   await attendi(async () => (await conta.innerText()).startsWith('1 /'), 'un voto solo dopo la ricarica')
   await telefonoVota(C, 'Ugo')
+  await T.perdi(true)
   await telefonoVota(T, null)
+  await T.attendiPerso()
+  await T.perdi(false)
+  await T.tocca('Conferma')
+  await T.pagina.getByText('Hai votato di saltare').waitFor()
   await confrontaRuoli('riunione dopo i voti')
   await A.giro('riunione-votato')
 
@@ -983,8 +1039,17 @@ async function connessionePersa() {
 
 // Il link aperto in una seconda scheda prende il posto: la prima si ferma e non rimbalza, finché non la si tocca.
 async function altraScheda() {
-  passo('Stessa stanza in due schede')
+  passo('Socket aperto in ritardo da una ricarica: il telefono riprende il posto da solo')
   const t = telefoni[1]
+  await t.pagina.evaluate(() => {
+    const w = window as any
+    const fantasma = new w.WebSocket(w.__socket.url)
+    fantasma.onmessage = () => fantasma.close()
+  })
+  await t.pagina.locator('.banner-rete').waitFor()
+  await t.pagina.locator('.banner-rete').waitFor({ state: 'detached', timeout: 8000 })
+
+  passo('Stessa stanza in due schede')
   const seconda = await t.pagina.context().newPage()
   seconda.on('console', m => {
     if (m.type() === 'error') t.errori.push(m.text())
@@ -1028,9 +1093,28 @@ async function ritardatario(browser: Browser, codice: string) {
   await t.pagina.locator('.errore').waitFor()
   const testo = await t.pagina.locator('#schermo').innerText()
   if (!testo.includes('aspetta che finisca')) segnala(`ritardatario: il messaggio non dice cosa fare: ${testo}`)
-  if (testo.includes('premi Entra.')) segnala('ritardatario: riceve ancora due ordini opposti')
+  if (testo.includes('già scritto: premi Entra')) segnala('ritardatario: riceve ancora due ordini opposti')
   if (!t.pagina.url().includes(`stanza=${codice}`)) segnala(`ritardatario: il link è andato perso: ${t.pagina.url()}`)
   await t.giro('home-ritardatario')
+
+  // Un rifiuto da questa stanza non tocca la partita che il telefono ha in memoria.
+  await t.pagina.evaluate(() => localStorage.setItem('sala-sospetti:stanza', 'ABCDE'))
+  await t.tocca('Entra')
+  await dorme(800)
+  await t.pagina.locator('.errore').waitFor()
+  const memoria = await t.pagina.evaluate(() => localStorage.getItem('sala-sospetti:stanza'))
+  if (memoria !== 'ABCDE') segnala(`un rifiuto da un'altra stanza ha cambiato la memoria: ${memoria}`)
+  await t.pagina.evaluate(() => localStorage.removeItem('sala-sospetti:stanza'))
+
+  // Il codice scritto a mano resta nel campo: il messaggio dice di premere di nuovo Entra.
+  await t.pagina.goto(indirizzo(`server=${encodeURIComponent(WS_SITO)}`), { waitUntil: 'load' })
+  await t.pagina.locator('#schermo[data-schermata="home"]').waitFor()
+  await t.pagina.getByLabel('Codice stanza').fill(codice)
+  await t.scrivi(t.nome)
+  await t.tocca('Entra')
+  await t.pagina.locator('.errore').waitFor()
+  const scritto = await t.pagina.getByLabel('Codice stanza').inputValue()
+  if (scritto !== codice) segnala(`dopo il rifiuto il campo codice mostra «${scritto}»`)
   await t.pagina.context().close()
   chiusi.push(t)
 }
@@ -1044,6 +1128,153 @@ async function stanzaSparita(browser: Browser) {
   await t.pagina.goto(indirizzo(`server=${WS_SITO}`), { waitUntil: 'load' })
   await t.pagina.locator('#schermo[data-schermata="home"]').waitFor()
   if (await t.pagina.locator('.errore').count()) segnala('rientro automatico fallito: la Home mostra un errore')
+  await t.pagina.context().close()
+  chiusi.push(t)
+}
+
+const invitoScheda = (pagina: Page) => pagina.getByRole('button', { name: /altra scheda/ })
+
+// Dopo Esci da una scheda, il banner dell'altra non rimette in stanza il giocatore.
+async function esciDaUnaScheda(browser: Browser) {
+  passo('Esci da una scheda, poi tocco sul banner dell’altra')
+  const t = new Telefono('Prova', 'schede')
+  const compagno = new Bot('Compagno')
+  await t.accendi(browser, 'dark')
+  await t.pagina.goto(indirizzo(`server=${WS_SITO}`), { waitUntil: 'load' })
+  await t.scrivi(t.nome)
+  await t.tocca('Crea stanza')
+  await t.aspetta('sala')
+  await compagno.apri((await t.pagina.locator('.ba-codice').innerText()).trim())
+  const seconda = await t.pagina.context().newPage()
+  await seconda.goto(t.pagina.url(), { waitUntil: 'load' })
+  await seconda.locator('#schermo[data-schermata="sala"]').waitFor()
+  await invitoScheda(t.pagina).tap()
+  await invitoScheda(seconda).waitFor({ timeout: 10 * 1000 })
+  await t.pagina.getByRole('button', { name: 'Esci dalla stanza' }).tap()
+  await t.pagina.locator('.dialogo').getByRole('button', { name: 'Esci' }).tap()
+  await t.pagina.locator('#schermo[data-schermata="home"]').waitFor()
+  await compagno.attendi(v => v.presenti === 1, 'uscita')
+  await invitoScheda(seconda).tap()
+  await seconda.locator('#schermo[data-schermata="home"]').waitFor()
+  await dorme(500)
+  if (compagno.v?.presenti !== 1) segnala(`dopo Esci la seconda scheda ha rimesso dentro il giocatore: presenti ${compagno.v?.presenti}`)
+  if (await seconda.evaluate(() => localStorage.getItem('sala-sospetti:stanza'))) segnala('dopo Esci la stanza è tornata in memoria')
+  compagno.chiudi()
+  await t.pagina.context().close()
+  chiusi.push(t)
+}
+
+// Riunione con il conto pieno ma ancora aperta: chi ha votato deve sapere perché è ferma.
+// Poi voti e salti alla pari: l'esito deve spiegare perché non esce nessuno.
+async function contoPieno(browser: Browser) {
+  passo('Conto pieno a riunione aperta, poi parità con i salti')
+  const t = new Telefono('Prova', 'conto')
+  const [uno, due, tre] = ['Uno', 'Due', 'Tre'].map(nome => new Bot(nome))
+  const compagni = [uno, due, tre]
+  await t.accendi(browser, 'dark')
+  await t.pagina.goto(indirizzo(`server=${WS_SITO}`), { waitUntil: 'load' })
+  await t.scrivi(t.nome)
+  await t.tocca('Crea stanza')
+  await t.aspetta('sala')
+  const codice = (await t.pagina.locator('.ba-codice').innerText()).trim()
+  for (const b of compagni) await b.apri(codice)
+  await uno.attendi(v => v.presenti === 4, 'tutti in sala')
+  await t.tocca('Start')
+  await t.tocca('Si parte')
+  await t.aspetta('ruolo')
+  await Promise.all(compagni.map(b => b.attendiSchermata('ruolo')))
+  for (const b of compagni) b.invia('ruoloVisto')
+  await t.tocca('Ho capito')
+  await t.aspetta('partita')
+  await uno.attendiSchermata('partita')
+  uno.invia('report')
+  await t.aspetta('riunione')
+  await uno.attendiSchermata('riunione')
+
+  const id = (nome: string) => uno.v?.giocatori.find((g: V) => g.nome === nome).id
+  await telefonoVota(t, null)
+  await t.pagina.getByText('In attesa degli altri').waitFor()
+  uno.invia('vota', id('Tre'))
+  due.invia('vota', id('Tre'))
+  await uno.attendi(v => v.votati === 3, 'tre voti')
+  tre.invia('sonoMorto')
+  await uno.attendi(v => v.rivota, 'il rivoto')
+  await t.pagina.getByText('Qualcuno deve votare di nuovo').waitFor()
+  await t.giro('riunione-conto-pieno')
+
+  await t.ferma(['esito'])
+  uno.invia('vota', id('Prova'))
+  due.invia('vota', id('Uno'))
+  await t.aspetta('esito')
+  await t.pagina.getByText('Tanti voti quanti salti').waitFor()
+  await t.giro('esito-salti')
+  await t.riprendi()
+  for (const b of compagni) b.chiudi()
+  await t.pagina.context().close()
+  chiusi.push(t)
+}
+
+// Wi-Fi lento: il JavaScript arriva dopo il campo. Il nome scritto nel frattempo vale, e i tasti non fingono di funzionare.
+async function javascriptLento(browser: Browser) {
+  passo('JavaScript lento: tasti spenti, nome scritto prima conservato')
+  const campo = (t: Telefono) => t.pagina.getByPlaceholder('Come ti chiamano gli altri?')
+  const carica = async (query: string, nomeSalvato: string) => {
+    const t = new Telefono('Mar', 'lento')
+    await t.accendi(browser, 'dark')
+    await t.pagina.addInitScript(nome => {
+      if (nome) localStorage.setItem('sala-sospetti:nome', nome)
+    }, nomeSalvato)
+    await t.pagina.route('**/_next/static/chunks/**', async percorso => {
+      await dorme(1500)
+      await percorso.continue()
+    })
+    await t.pagina.goto(indirizzo(query), { waitUntil: 'commit' })
+    await campo(t).waitFor()
+    if (nomeSalvato) await campo(t).pressSequentially(t.nome)
+    return t
+  }
+  const pronto = (t: Telefono) => t.pagina.waitForFunction(() => !document.documentElement.dataset.attesa)
+
+  // Home senza invito: il tasto è spento finché la pagina non è attiva, poi crea la stanza con il nome scritto prima.
+  const t = await carica(`server=${WS_SITO}`, '')
+  await campo(t).pressSequentially(t.nome)
+  const crea = t.pagina.getByRole('button', { name: 'Crea stanza', exact: true })
+  if ((await crea.evaluate(el => getComputedStyle(el).pointerEvents)) !== 'none' && (await t.pagina.evaluate(() => document.documentElement.dataset.attesa))) segnala('prima dell’aggancio Crea stanza sembra attivo')
+  await pronto(t)
+  if ((await campo(t).inputValue()) !== t.nome) segnala(`dopo l'aggancio il campo mostra «${await campo(t).inputValue()}»`)
+  await crea.tap()
+  await t.aspetta('sala')
+  await t.pagina.context().close()
+  chiusi.push(t)
+
+  // Link d'invito con un nome salvato: la Home generica non propone Crea stanza, e il nome scritto vale più di quello salvato.
+  const u = await carica(`stanza=KMNPQ&server=${WS_SITO}`, 'Gino')
+  if (await u.pagina.evaluate(() => document.documentElement.dataset.attesa === 'invito')) {
+    if (await u.pagina.getByRole('button', { name: 'Crea stanza', exact: true }).isVisible()) segnala('dal link d’invito, prima dell’aggancio, si vede Crea stanza')
+  }
+  await pronto(u)
+  await dorme(100)
+  const nome = await campo(u).inputValue()
+  if (!nome.startsWith(u.nome)) segnala(`link d'invito: dopo l'aggancio il campo mostra «${nome}»`)
+  if ((await u.pagina.getByLabel('Codice stanza').inputValue()) !== 'KMNPQ') segnala('link d’invito: il codice non è nel campo')
+  await u.tocca('Entra')
+  await u.pagina.locator('.errore').waitFor()
+  const rifiuto = await u.pagina.locator('.errore').innerText()
+  if (!rifiuto.includes('Stanza non trovata')) segnala(`link d'invito: dopo Entra si legge «${rifiuto}»`)
+  await u.pagina.context().close()
+  chiusi.push(u)
+}
+
+// Il codice scritto nell'indirizzo porta qui: una pagina in italiano, con la strada per tornare al gioco.
+async function paginaSbagliata(browser: Browser) {
+  passo('Pagina che non esiste')
+  const t = new Telefono('Prova', 'nontrovata')
+  await t.accendi(browser, 'dark')
+  await t.pagina.goto(`${SITO}/404.html`, { waitUntil: 'load' })
+  await t.pagina.getByText('Pagina non trovata').waitFor()
+  await t.giro('non-trovata')
+  await t.pagina.getByRole('link', { name: 'Vai al gioco' }).tap()
+  await t.pagina.locator('#schermo[data-schermata="home"]').waitFor()
   await t.pagina.context().close()
   chiusi.push(t)
 }
@@ -1110,6 +1341,12 @@ async function partita(browser: Browser) {
   const codice = (await A.pagina.locator('.ba-codice').innerText()).trim()
   await ritardatario(browser, codice)
 
+  passo('Ho capito perso: il telefono lo dice e resta sul ruolo')
+  await T.perdi(true)
+  await T.tocca('Ho capito')
+  await T.attendiPerso()
+  await T.perdi(false)
+
   await vaiInPartita()
   await T.ricarica('partita') // Dopo Ho capito il ruolo non torna
   await schermata('partita', [A, C])
@@ -1132,6 +1369,10 @@ async function partita(browser: Browser) {
   await uscite()
   await collegamento(browser)
   await stanzaSparita(browser)
+  await esciDaUnaScheda(browser)
+  await contoPieno(browser)
+  await javascriptLento(browser)
+  await paginaSbagliata(browser)
 
   passo('Si esce tutti')
   for (const b of bot) if (b.ws) b.invia('esci')

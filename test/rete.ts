@@ -713,9 +713,11 @@ async function malformati(): Promise<string> {
     `{"__proto__":{"a":"spunta","f":${f}}}`, `{"a":"start","f":${f}}`, `{"a":"impostaTask","x":1e309,"f":${f}}`,
     '['.repeat(1000), '{"a":'.repeat(200), imbottita(1025), imbottita(2048), imbottita(512 * 1024),
   ]
-  for (const m of spazzatura) ws.send(m)
-  ws.send(new Uint8Array([0, 255, 1, 2]))
-  ws.send(new Uint8Array(4096))
+  // Uno ogni 60 ms: qui si provano i contenuti, il limite di ritmo ha la sua prova.
+  for (const m of [...spazzatura, new Uint8Array([0, 255, 1, 2]), new Uint8Array(4096)]) {
+    ws.send(m)
+    await dorme(60)
+  }
   await dorme(500)
   assert.equal(a.v.barra, 0, 'nessuna spunta passata tra gli scarti')
   assert.ok(a.aperto(), 'socket ancora aperto')
@@ -724,7 +726,10 @@ async function malformati(): Promise<string> {
   await convoca(b, 'report', telefoni)
   const fr: number = a.v.f
   const voti = [id(a), 9999, -1, 1.5, '1', null, true, [id(b)], { id: id(b) }, '__proto__', 'constructor', 'salta2']
-  for (const x of voti) ws.send(JSON.stringify({ a: 'vota', x, f: fr }))
+  for (const x of voti) {
+    ws.send(JSON.stringify({ a: 'vota', x, f: fr }))
+    await dorme(60)
+  }
   await dorme(300)
   assert.equal(a.v.votati, 0, 'voti falsificati')
   a.invia('togli', id(b))
@@ -742,6 +747,69 @@ async function malformati(): Promise<string> {
   assert.ok(telefoni.every(t => t.aperto()), 'tutti i socket ancora aperti')
   await congeda(telefoni)
   return `${spazzatura.length + 2 + voti.length} messaggi scartati`
+}
+
+// Chi inonda viene staccato con un codice da cui il telefono si riprende: gli altri non se ne accorgono e il posto resta suo.
+async function inondazione(): Promise<string> {
+  const { codice, telefoni } = await nuovaStanza(3)
+  const [a, b, c] = telefoni
+  const posto = id(a)
+  const avvii = avviiDi(codice)
+  const quanti = 200
+  for (let i = 0; i < quanti; i++) a.ws?.send(i % 2 ? 'x' : JSON.stringify({ f: -1, a: 'start' }))
+  assert.equal(await a.attendiChiusura(), 1008, 'chiusura per troppi messaggi')
+  assert.ok(b.aperto() && c.aperto(), 'gli altri restano collegati')
+
+  await a.apri(codice)
+  assert.equal(a.errore, null, 'il telefono rientra')
+  assert.equal(id(a), posto, 'stesso posto')
+
+  // I comandi di un dito veloce, 15 al secondo, non fanno scattare il limite.
+  for (let x = 2; x < 32; x++) {
+    a.invia('impostaTask', x)
+    await dorme(66)
+  }
+  await aspettaTutti(telefoni, v => v.numeroTask === 31, 'comandi rapidi tutti applicati')
+  assert.ok(a.aperto(), 'il dito veloce resta collegato')
+  assert.equal(avviiDi(codice), avvii, "l'oggetto non è mai ripartito")
+  await congeda(telefoni)
+  return `${quanti} messaggi di fila, poi 30 comandi a 15 al secondo`
+}
+
+// I telefoni di una festa escono dallo stesso IP: un calo di rete li riporta tutti insieme, e il tetto non deve toccarli.
+async function ritornoInsieme(): Promise<string> {
+  const { codice, telefoni } = await nuovaStanza(15)
+  const ids = telefoni.map(id)
+  const giri = 4
+  for (let giro = 0; giro < giri; giro++) {
+    await Promise.all(telefoni.map(t => t.chiudi()))
+    await Promise.all(telefoni.map(t => t.apri(codice)))
+    for (const [i, t] of telefoni.entries()) {
+      assert.equal(t.errore, null, `${t.nome} rientra al giro ${giro}`)
+      assert.ok(t.aperto(), `${t.nome} collegato al giro ${giro}`)
+      assert.equal(t.v.io.id, ids[i], `${t.nome} riprende il suo posto`)
+    }
+  }
+  await congeda(telefoni)
+  return `${giri} giri da 15 rientri simultanei, tutti riusciti`
+}
+
+// Oltre il tetto il tentativo si ferma nel Worker con un 429, che per il telefono è un socket caduto: riprova da solo.
+async function tettoTentativi(massimo: number): Promise<string> {
+  const quanti = massimo + 10
+  let arrivati = 0
+  let fermati = 0
+  for (let i = 0; i < quanti; i++) {
+    const t = new Telefono('Scansione')
+    await t.apri(generaCodice(Math.random))
+    t.spegni()
+    if (t.errore === 'stanza-inesistente') arrivati++
+    else if (t.errore === null) fermati++
+  }
+  assert.equal(arrivati, massimo, 'tentativi arrivati alla stanza')
+  assert.equal(fermati, quanti - massimo, 'tentativi fermati prima della stanza')
+  assert.ok(!registro.includes('Uncaught'), 'nessun errore dal 429')
+  return `${arrivati} arrivati, ${fermati} fermati`
 }
 
 // Ogni rifiuto arriva come messaggio su un socket accettato, poi il socket si chiude.
@@ -933,6 +1001,8 @@ await Promise.all([
   prova('Rientro con token e con nome', rientri),
   prova('Doppio socket', doppioSocket),
   prova('Messaggi malformati', malformati),
+  prova('Inondazione: staccato solo chi inonda', inondazione),
+  prova('15 telefoni che tornano insieme', ritornoInsieme),
   prova('Rifiuti e salute', rifiuti),
 ])
 
@@ -940,6 +1010,13 @@ const tavolo = await prova('S12 processo ucciso in riunione: 15 rientri, voti in
 if (tavolo) await prova('S13 oggetto ibernato: 60 s di silenzio senza perdite', () => s13(tavolo))
 if (!server) await avviaServer([])
 await prova('S12 scadenza passata a server fermo', scadenzaPassata)
+
+// In coda e con un server a parte: tutte le prove escono dallo stesso IP, e un tetto basso le fermerebbe.
+await prova('Tetto ai tentativi per IP', async () => {
+  await fermaServer()
+  await avviaServer(['TENTATIVI_MAX:25'])
+  return tettoTentativi(25)
+})
 
 await prova('C1 nessun segreto nelle viste', async () => assert.deepEqual(violazioni.slice(0, 5), []))
 await prova('Nessun errore nel registro di wrangler', async () => {
